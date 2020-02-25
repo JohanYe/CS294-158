@@ -99,9 +99,5 @@ pi, mu, var = net(x)
 z = net.Latent(x, pi, mu, var).cpu().detach().numpy()
 
 plt.figure(3)
-# plt.scatter(z[y == 0, 0], z[y == 0, 1], marker='.', label='label-0')
-# plt.scatter(z[y == 1, 0], z[y == 1, 1], marker='.', label='label-1')
-# plt.scatter(z[y == 2, 0], z[y == 2, 1], marker='.', label='label-2')
-
 plt.scatter(z[:, 0], z[:, 1], c=y)
 plt.savefig('./Hw2/Figures/Figure_3.pdf', bbox_inches='tight')

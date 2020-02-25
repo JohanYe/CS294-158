@@ -85,3 +85,5 @@ class flow(nn.Module):
         z = torch.distributions.normal.Normal(mu, var).cdf(x.unsqueeze(2))
         z = torch.sum(pi * z, dim=2)
         return z
+
+
