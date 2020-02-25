@@ -36,12 +36,9 @@ def calc_loss(x, pi, mu, var):
     # Evaluation in normal dist
     weighted = pi * (torch.exp(- torch.pow(x.unsqueeze(2) - mu, 2) / (2 * var)) / torch.sqrt(2 * np.pi * var))
     density = torch.sum(weighted, dim=2)
-    loss = -torch.mean(torch.log2(density))/2
+    joint = density[:, 0] * density[:, 1]
+    loss = -torch.mean(torch.log2(joint))/2
     return loss
-
-
-
-
 
 # Training loop
 for epoch in range(n_epochs):
@@ -83,27 +80,15 @@ ax[0].set_title('Training Curve')
 ax[0].set_xlabel('Num Steps')
 ax[0].set_ylabel('Negative Log Likelihood')
 
-# Load best and generate
+# # Load best and generate
 load_checkpoint('./checkpoints/best.pth.tar', net)
 pdf = net.sampling()
 
-
-ax[1].imshow(pdf.cpu().detach(),aspect= 'auto')
+ax[1].imshow(pdf.cpu().numpy(), aspect='auto')
 ax[1].set_xticks([])
 ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-plt.savefig('Figure_5.pdf',bbox_inches='tight')
-plt.close()
+plt.savefig('Figure_2.pdf', bbox_inches='tight')
+# plt.close()
 
-axis = np.linspace(-2, 3.5, 100)
-samples = np.array(np.meshgrid(axis, axis)).reshape([-1, 2])
-samples = torch.from_numpy(samples).to(device).float()
-with torch.no_grad():
-    pi, mu, var = net(samples)
-
-# calc loss
-weighted = pi * (torch.exp(- torch.pow(samples.unsqueeze(2) - mu, 2) / (2 * var)) / torch.sqrt(2 * np.pi * var))
-density = torch.sum(weighted, dim=2)
-pdf = (2 ** torch.log2(density)).reshape(100,100)
-ax[1].imshow(pdf.cpu().detach(),aspect= 'auto')

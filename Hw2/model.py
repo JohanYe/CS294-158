@@ -76,7 +76,7 @@ class flow(nn.Module):
         # calc loss
         weighted = pi * (torch.exp(- torch.pow(samples.unsqueeze(2) - mu, 2) / (2 * var)) / torch.sqrt(2 * np.pi * var))
         density = torch.sum(weighted, dim=2)
-        pdf = 2**torch.mean(torch.log2(density)) / 2
-
+        joint = density[:, 0] * density[:, 1]
+        pdf = torch.exp(-1 * -torch.log(torch.abs(joint))).reshape(100, 100)
         return pdf
 
