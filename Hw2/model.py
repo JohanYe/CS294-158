@@ -66,9 +66,9 @@ class flow(nn.Module):
 
         return pi, mu, var
 
-    def sampling(self):
-        axis = np.linspace(-2, 3.5, 100)
-        samples = np.array(np.meshgrid(axis, axis)).reshape([-1, 2])
+    def sampling(self, pixel=100):
+        axis = np.linspace(-4, 4, pixel)
+        samples = np.array(np.meshgrid(axis, axis)).T.reshape([-1, 2])
         samples = torch.from_numpy(samples).to(device).float()
         with torch.no_grad():
             pi, mu, var = self(samples)
@@ -77,6 +77,6 @@ class flow(nn.Module):
         weighted = pi * (torch.exp(- torch.pow(samples.unsqueeze(2) - mu, 2) / (2 * var)) / torch.sqrt(2 * np.pi * var))
         density = torch.sum(weighted, dim=2)
         joint = density[:, 0] * density[:, 1]
-        pdf = torch.exp(-1 * -torch.log(torch.abs(joint))).reshape(100, 100)
+        pdf = torch.exp(-1 * -torch.log(torch.abs(joint))).reshape(pixel, pixel)
         return pdf
 

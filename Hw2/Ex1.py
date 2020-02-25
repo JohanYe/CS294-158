@@ -6,11 +6,11 @@ from Hw2.model import *
 sns.set_style("darkgrid")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-k = 10
+k = 15
 net = flow(k, 100).to(device)
 optimizer = optim.Adam(net.parameters(), lr=1e-3)
-batch_size = 250
-n_epochs = 5
+batch_size = 125
+n_epochs = 10
 train_log = []
 val_log = {}
 best_nll = np.inf
@@ -78,17 +78,17 @@ ax[0].plot(x_val, y_val, label='Validation Error')
 ax[0].legend(loc='best')
 ax[0].set_title('Training Curve')
 ax[0].set_xlabel('Num Steps')
-ax[0].set_ylabel('Negative Log Likelihood')
+ax[0].set_ylabel('NLL in bits per dim')
 
 # # Load best and generate
 load_checkpoint('./checkpoints/best.pth.tar', net)
-pdf = net.sampling()
+pdf = net.sampling(pixel=200)
 
-ax[1].imshow(pdf.cpu().numpy(), aspect='auto')
+ax[1].imshow(np.rot90(pdf.cpu().numpy()))
 ax[1].set_xticks([])
 ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
 plt.savefig('Figure_2.pdf', bbox_inches='tight')
-# plt.close()
+plt.close()
 
