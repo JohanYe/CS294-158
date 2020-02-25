@@ -80,3 +80,8 @@ class flow(nn.Module):
         pdf = torch.exp(-1 * -torch.log(torch.abs(joint))).reshape(pixel, pixel)
         return pdf
 
+    def Latent(self, x, pi, mu, var):
+
+        z = torch.distributions.normal.Normal(mu, var).cdf(x.unsqueeze(2))
+        z = torch.sum(pi * z, dim=2)
+        return z

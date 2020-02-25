@@ -8,7 +8,7 @@ sns.set_style("darkgrid")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 k = 15
 net = flow(k, 100).to(device)
-optimizer = optim.Adam(net.parameters(), lr=1e-3)
+optimizer = optim.Adam(net.parameters(), lr=2e-4)
 batch_size = 125
 n_epochs = 10
 train_log = []
@@ -92,3 +92,16 @@ ax[1].set_title("Best distribution on validation set")
 plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
 plt.close()
 
+# Latent visualization
+x, y = sample_data()
+x = torch.from_numpy(x).float().to(device)
+pi, mu, var = net(x)
+z = net.Latent(x, pi, mu, var).cpu().detach().numpy()
+
+plt.figure(3)
+# plt.scatter(z[y == 0, 0], z[y == 0, 1], marker='.', label='label-0')
+# plt.scatter(z[y == 1, 0], z[y == 1, 1], marker='.', label='label-1')
+# plt.scatter(z[y == 2, 0], z[y == 2, 1], marker='.', label='label-2')
+
+plt.scatter(z[:, 0], z[:, 1], c=y)
+plt.savefig('./Hw2/Figures/Figure_3.pdf', bbox_inches='tight')
