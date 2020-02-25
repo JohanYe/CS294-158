@@ -9,7 +9,7 @@ import itertools
 
 # loss function
 from Hw1.Utils import one_hot_cat, get_mean_NLL, save_checkpoint
-device = 'cpu'#torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def calc_loss(theta, data_batch):
@@ -27,7 +27,7 @@ def calc_loss(theta, data_batch):
 class MLP(nn.Module):
     def __init__(self):
         super(MLP, self).__init__()
-        self.theta = nn.Parameter(torch.zeros([200]).float())  # Like in exercise 1 (x1)
+        self.theta = nn.Parameter(torch.zeros([200]).float()).to(device)  # Like in exercise 1 (x1)
         self.prob2 = nn.Sequential(
             nn.Linear(200, 200),
             nn.ReLU(),

@@ -19,7 +19,7 @@ save_dir = './checkpoints/'
 plt.figure(1)
 x, y = sample_data()
 plt.scatter(x[:, 0], x[:, 1], marker='.')
-plt.savefig('Figure_1.pdf')
+plt.savefig('./Hw2/Figures/Figure_1.pdf')
 plt.close(1)
 train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size, shuffle=True)
 X_val = torch.from_numpy(x[int(len(x) * 0.8):]).float().to(device)
@@ -89,6 +89,6 @@ ax[1].set_xticks([])
 ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-plt.savefig('Figure_2.pdf', bbox_inches='tight')
+plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
 plt.close()
 

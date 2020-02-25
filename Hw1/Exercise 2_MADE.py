@@ -77,7 +77,7 @@ train_y_vals = [train_log[k] for k in train_x_vals]
 ax[0].plot(train_x_vals, train_y_vals, label='Training Error')
 ax[0].plot(x_val, y_val, label='Validation Error')
 ax[0].legend(loc='best')
-ax[0].set_title('Training Curve')
+ax[0].set_title('MADE Training Curve')
 ax[0].set_xlabel('Num Steps')
 ax[0].set_ylabel('Negative Log Likelihood')
 
@@ -89,4 +89,4 @@ ax[1].set_xticks([])
 ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-plt.savefig('Figure_6.pdf')
+plt.savefig('./Hw1/Figures/Figure_6.pdf',bbox_inches='tight')

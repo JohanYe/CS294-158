@@ -18,7 +18,7 @@ sns.set_context("talk")
 x = DataGenerator.sample_data()
 plt.figure(1)
 plt.hist(x, 100, density=True)
-plt.show()
+plt.savefig('./Hw1/Figures/Figure_1.pdf',bbox_inches='tight')
 
 # Train validation split
 x_train, x_val = train_test_split(x, test_size=0.2)
@@ -28,7 +28,7 @@ theta = torch.zeros(100, requires_grad=True)
 optimizer = optim.Adam([theta], lr=1e-3)
 
 # Hyperparameters:
-num_epochs = 500
+num_epochs = 250
 batch_size = 200
 k = 0
 
@@ -58,7 +58,7 @@ plt.plot(train_x_vals, train_y_vals, label='Train')
 plt.plot(x_tst, y_tst, label='Validation')
 plt.title('Training Curve')
 plt.legend(loc='best')
-plt.savefig('Figure_2.pdf',bbox_inches='tight')
+plt.savefig('./Hw1/Figures/Figure_2.pdf',bbox_inches='tight')
 plt.show()
 
 # Compute model probabilites
@@ -70,6 +70,6 @@ plt.bar(np.arange(100), theta_prob)
 plt.title("Model Probabilities")
 plt.xlabel("x")
 plt.ylabel("P_theta(x)")
-plt.savefig('Figure_3.pdf',bbox_inches='tight')
+plt.savefig('./Hw1/Figures/Figure_3.pdf',bbox_inches='tight')
 plt.show()
 

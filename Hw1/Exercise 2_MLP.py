@@ -38,7 +38,7 @@ axes[2].set_xticks([])
 axes[2].set_yticks([])
 
 fig.suptitle("Data")
-plt.savefig('Figure_4.pdf', bbox_inches='tight')
+plt.savefig('./Hw1/Figures/Figure_4.pdf', bbox_inches='tight')
 plt.close()
 
 # Hyperparameters:
@@ -50,7 +50,7 @@ val_log = {}
 k = 0
 best_nll = np.inf
 save_dir = './checkpoints/'
-device = 'cpu'#torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Data loaders
 
@@ -117,5 +117,5 @@ ax[1].set_xticks([])
 ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-plt.savefig('Figure_5.pdf',bbox_inches='tight')
+plt.savefig('./Hw1/Figures/Figure_5.pdf',bbox_inches='tight')
 plt.close()
