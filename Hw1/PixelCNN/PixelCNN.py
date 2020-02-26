@@ -3,13 +3,12 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt   
 import pickle
-import torch.nn.functional as F
-import torch.nn as nn
 import seaborn as sns
-import os
 import time
 import torch.optim as optim
 from Hw1.PixelCNN.model import *
+from Hw1.PixelCNN.Utils import *
+sns.set_style("darkgrid")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

@@ -12,14 +12,17 @@ class MaskedConv2d(nn.Conv2d):
     def __init__(self, mask_type='A', *args, **kwargs):
         super(MaskedConv2d, self).__init__(*args, **kwargs)
 
+        mask_type = mask_type.upper()
         assert mask_type in {'A', 'B'}
 
         mask = torch.ones_like(self.weight)
         _, _, height, width = self.weight.shape
 
         # Spatial masking
-        mask[:, :, height // 2, width // 2 + (mask_type == 'B'):] = 0
-        mask[:, :, height // 2 + 1:] = 0
+        mask[:, :, height // 2, width // 2 + (mask_type == 'B'):] = 0  # masking along dim 0
+        mask[:, :, height // 2 + 1:] = 0  # masking along dim 1
+        # RGB masking (in current pixel only)
+        mask[:, : height // 2, width // 2] = mask_channels(mask_type, in_channels, out_channels, data_channels)
         self.register_buffer('mask', mask)
 
     def forward(self, x):
@@ -48,6 +51,41 @@ class ResNetBlock(nn.Module):
 
     def forward(self, x):
         return self.out(x) + x
+
+
+def mask_channels(mask_type, in_channels, out_channels, data_channels=3):
+    """
+    Autoregressive channel masking, B being the lenient mask
+    :param mask_type: "A" or "B" according to pixelcnn paper
+    :param in_channels: input channels
+    :param out_channels: output channels
+    :param data_channels: channels in original data
+    :return:
+    """
+    mask_type = mask_type.upper()
+    assert mask_type in {'A', 'B'}
+
+    in_factor = in_channels // data_channels + 1
+    out_factor = out_channels // data_channels + 1
+
+    mask = torch.ones([data_channels, data_channels])
+
+    # Mask A masked diagonal, while B doesn't - the diagonal is the ability to see itself.
+    # if b 0   0
+    #  1  if b 0
+    #  1   1  if b
+    if mask_type == 'A':
+        mask = mask.tril(-1)
+    else:
+        mask = mask.tril(0)
+
+    # Creating mask pattern in order to match weight matrix
+    mask = torch.cat([mask] * in_factor, dim=1)  # duplication along dim 1
+    mask = torch.cat([mask] * out_factor, dim=0)  # duplication along dim 0
+
+    mask = mask[0:out_channels, 0:in_channels] # This is due to rounding from in_factor / out_factor
+
+    return mask
 
 
 class PixelCNN(nn.Module):
@@ -91,12 +129,3 @@ class PixelCNN(nn.Module):
                     x[0, k, i, j] = np.random.choice(4, p=dist[0, :, k, i, j].cpu().data.numpy())
 
         return x
-
-
-def save_checkpoint(state, save_dir, ckpt_name='best.pth.tar'):
-    file_path = os.path.join(save_dir, ckpt_name)
-    if not os.path.exists(save_dir):
-        print("Save directory dosen't exist! Makind directory {}".format(save_dir))
-        os.mkdir(save_dir)
-
-    torch.save(state, file_path)
