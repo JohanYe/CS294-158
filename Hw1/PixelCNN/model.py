@@ -88,10 +88,6 @@ class ResNetBlock(nn.Module):
     def forward(self, x):
         return self.out(x) + x
 
-
-
-
-
 class PixelCNN(nn.Module):
 
     def __init__(self, image_shape, n_layers=12, n_filters=128, n_classes=4, final_channels=3):

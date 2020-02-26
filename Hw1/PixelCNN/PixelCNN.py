@@ -48,7 +48,7 @@ optimizer = optim.Adam(net.parameters(),lr=lr)
 def calc_loss(logits, batch):
     # Divide by 2 for NLL per bit
     #print(logits.shape,batch.shape)
-    loss = F.cross_entropy(logits, batch.long(), reduction='sum') / batch_size
+    loss = F.cross_entropy(logits, batch.long(), reduction='sum') / batch_size / np.log(2.0) / (28 * 28 * 3)
     return loss
 
 
