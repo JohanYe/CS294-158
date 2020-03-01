@@ -15,17 +15,19 @@ train_log = []
 val_log = {}
 best_nll = np.inf
 save_dir = './checkpoints/'
+prior = torch.distributions.MultivariateNormal(torch.zeros(2), torch.eye(2))  # standard normal
 
 plt.figure(1)
 x, y = sample_data()
 plt.scatter(x[:, 0], x[:, 1], marker='.')
 plt.savefig('./Hw2/Figures/Figure_1.pdf')
-plt.close(1)
-train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size, shuffle=True)
+#plt.close(1)
+train_loader = torch.utils.data.DataLoader(
+    torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size, shuffle=True)
 X_val = torch.from_numpy(x[int(len(x) * 0.8):]).float().to(device)
 
 
-def calc_loss(z, jacobian):
+def calc_loss(z, jacobian, prior):
     """
     Evaluate loss in prior distirbution
     :param z: affine_coupled data from RealNVP
@@ -34,8 +36,6 @@ def calc_loss(z, jacobian):
     """
 
     # Evaluation in normal dist
-    prior = torch.distributions.MultivariateNormal(torch.zeros(2), torch.eye(2))
-
     loss = prior.log_prob(z.cpu()) + jacobian.cpu().squeeze()
     loss = -loss.mean() / np.log(2)
     return loss
@@ -45,7 +45,7 @@ for epoch in range(n_epochs):
     for batch in train_loader:
         batch = batch.to(device)
         z, jacobian = net(batch)
-        loss = calc_loss(z, jacobian)
+        loss = calc_loss(z, jacobian, prior)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -54,7 +54,7 @@ for epoch in range(n_epochs):
 
     with torch.no_grad():
         z, jacobian = net(X_val)
-        loss = calc_loss(z, jacobian)
+        loss = calc_loss(z, jacobian, prior)
         val_log[k] = loss.item()
 
     if loss.item() < best_nll:
@@ -72,7 +72,7 @@ y_val = list(val_log.values())
 train_x_vals = np.arange(len(train_log))
 train_y_vals = train_log
 
-fig, ax = plt.subplots(1,2,figsize=(10,5))
+fig, ax = plt.subplots(1, 3,figsize=(10,5))
 ax[0].plot(train_x_vals, train_y_vals, label='Training Error')
 ax[0].plot(x_val, y_val, label='Validation Error')
 ax[0].legend(loc='best')
@@ -80,27 +80,22 @@ ax[0].set_title('Training Curve')
 ax[0].set_xlabel('Num Steps')
 ax[0].set_ylabel('NLL in bits per dim')
 
-# # Load best and generate
+# Load best and generate + visualize latent space
 load_checkpoint('./checkpoints/best.pth.tar', net)
-pdf = net.sampling(pixel=200)
+x_sample = net.sample(5000, prior).cpu().detach().numpy()
+ax[1].scatter(x_sample[:, 0, 0], x_sample[:, 0, 1])
 
-ax[1].imshow(np.rot90(pdf.cpu().numpy()))
-ax[1].set_xticks([])
-ax[1].set_yticks([])
-ax[1].set_title("Best distribution on validation set")
-
-plt.savefig('./Hw2/Figures/Figure_4.pdf', bbox_inches='tight')
-plt.close()
+# plt.savefig('./Hw2/Figures/Figure_4.pdf', bbox_inches='tight')
+# plt.close()
 
 # Latent visualization
-x, y = sample_data()
-x = torch.from_numpy(x).float().to(device)
-pi, mu, var = net(x)
-z = net.Latent(x, pi, mu, var).cpu().detach().numpy()
-
-plt.figure(3)
-plt.scatter(z[:, 0], z[:, 1], c=y)
-plt.savefig('./Hw2/Figures/Figure_5.pdf', bbox_inches='tight')
+with torch.no_grad():
+    z, _ = net(torch.from_numpy(x).to(device).float())
+z = z.cpu().detach().numpy()
+# plt.figure(3)
+ax[2].scatter(z[:, 0], z[:, 1],c=y)
+ax[2].set_title("Latent space")
+# plt.savefig('./Hw2/Figures/Figure_5.pdf', bbox_inches='tight')
 
 plt.figure(4)
 axis = np.linspace(-4, 4, 100)
@@ -110,7 +105,7 @@ with torch.no_grad():
     z, jacobian = net(samples)
 
 # calc loss
-pdf = torch.exp(jacobian).cpu().numpy().reshape(100,100)
+pdf = torch.exp(jacobian).cpu().numpy().reshape(100, 100)
 plt.imshow(np.rot90(pdf))
 plt.set_xticks([])
 plt.set_yticks([])
@@ -118,5 +113,9 @@ plt.set_title("Best distribution on validation set")
 
 
 prior = torch.distributions.MultivariateNormal(torch.zeros(2), torch.eye(2))
-z = prior.sample((125, 1))
-
+z = prior.sample((5000, 1)).to(device)
+with torch.no_grad():
+    for i in range(len(net.layers)):
+        z, log_determinant = net.layers[i].inverse(z, net.mask[i])
+z = z.cpu().numpy()
+plt.scatter(z[:, 0, 0], z[:, 0, 1])
