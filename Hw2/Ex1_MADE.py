@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from Hw2.Utils import *
 from Hw2.model import *
+
 sns.set_style("darkgrid")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -21,8 +22,10 @@ x, y = sample_data()
 plt.scatter(x[:, 0], x[:, 1], marker='.')
 plt.savefig('./Hw2/Figures/Figure_1.pdf')
 plt.close(1)
-train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size, shuffle=True)
+train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size,
+                                           shuffle=True)
 X_val = torch.from_numpy(x[int(len(x) * 0.8):]).float().to(device)
+
 
 def calc_loss(x, pi, mu, var):
     """
@@ -37,8 +40,9 @@ def calc_loss(x, pi, mu, var):
     weighted = pi * (torch.exp(- torch.pow(x.unsqueeze(2) - mu, 2) / (2 * var)) / torch.sqrt(2 * np.pi * var))
     density = torch.sum(weighted, dim=2)
     joint = density[:, 0] * density[:, 1]
-    loss = -torch.mean(torch.log2(joint))/2
+    loss = -torch.mean(torch.log2(joint)) / 2
     return loss
+
 
 # Training loop
 for epoch in range(n_epochs):
@@ -62,7 +66,7 @@ for epoch in range(n_epochs):
         save_checkpoint({'epoch': epoch, 'state_dict': net.state_dict()}, save_dir)
 
     print('[Epoch %d/%d][Step: %d] Train Loss: %s Test Loss: %s' \
-          % (epoch+1, n_epochs, k, np.mean(train_log[-10:]), val_log[k]))
+          % (epoch + 1, n_epochs, k, np.mean(train_log[-10:]), val_log[k]))
 
 # Plotting each minibatch step
 x_val = list(val_log.keys())
@@ -72,7 +76,7 @@ y_val = list(val_log.values())
 train_x_vals = np.arange(len(train_log))
 train_y_vals = train_log
 
-fig, ax = plt.subplots(1,2,figsize=(10,5))
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 ax[0].plot(train_x_vals, train_y_vals, label='Training Error')
 ax[0].plot(x_val, y_val, label='Validation Error')
 ax[0].legend(loc='best')

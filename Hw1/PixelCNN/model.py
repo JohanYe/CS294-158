@@ -78,11 +78,14 @@ class ResNetBlock(nn.Module):
         self.out = nn.Sequential(
             nn.ReLU(),  # Relu first, strange setup
             nn.Conv2d(in_channels, self.h, kernel_size=1),
+            nn.BatchNorm2d(self.h),
             nn.ReLU(),
             # padding to conserve shape.
             MaskedConv2d(in_channels=self.h, out_channels=self.h, kernel_size=3, padding=1, mask_type='B'),
+            nn.BatchNorm2d(self.h),
             nn.ReLU(),
-            nn.Conv2d(self.h, in_channels, kernel_size=1)
+            nn.Conv2d(self.h, in_channels, kernel_size=1),
+            nn.BatchNorm2d(in_channels),
         )
 
     def forward(self, x):

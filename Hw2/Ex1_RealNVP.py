@@ -7,10 +7,10 @@ sns.set_style("darkgrid")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 k = 15
-net = flow(k, 100).to(device)
-optimizer = optim.Adam(net.parameters(), lr=2e-4)
+net = RealNVP(in_features=2,hidden_features=100,AC_layers=8).to(device)
+optimizer = optim.Adam(net.parameters(), lr=1e-4)
 batch_size = 125
-n_epochs = 10
+n_epochs = 2
 train_log = []
 val_log = {}
 best_nll = np.inf
@@ -24,28 +24,28 @@ plt.close(1)
 train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size, shuffle=True)
 X_val = torch.from_numpy(x[int(len(x) * 0.8):]).float().to(device)
 
-def calc_loss(x, pi, mu, var):
+
+def calc_loss(z, jacobian):
     """
-    calculates by evaluation in weighted normal distribution
-    :param pi: torch.Tensor network output
-    :param mu: torch.Tensor network output
-    :param var: torch.Tensor network output
+    Evaluate loss in prior distirbution
+    :param z: affine_coupled data from RealNVP
+    :param log_determinant: Log_determinant from RealNVP
     :return: loss
     """
 
     # Evaluation in normal dist
-    weighted = pi * (torch.exp(- torch.pow(x.unsqueeze(2) - mu, 2) / (2 * var)) / torch.sqrt(2 * np.pi * var))
-    density = torch.sum(weighted, dim=2)
-    joint = density[:, 0] * density[:, 1]
-    loss = -torch.mean(torch.log2(joint))/2
+    prior = torch.distributions.MultivariateNormal(torch.zeros(2), torch.eye(2))
+
+    loss = prior.log_prob(z.cpu()) + jacobian.cpu().squeeze()
+    loss = -loss.mean() / np.log(2)
     return loss
 
 # Training loop
 for epoch in range(n_epochs):
     for batch in train_loader:
         batch = batch.to(device)
-        pi, mu, var = net(batch)
-        loss = calc_loss(batch, pi, mu, var)
+        z, jacobian = net(batch)
+        loss = calc_loss(z, jacobian)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -53,15 +53,15 @@ for epoch in range(n_epochs):
         k += 1
 
     with torch.no_grad():
-        pi, mu, var = net(X_val)
-        loss = calc_loss(X_val, pi, mu, var)
+        z, jacobian = net(X_val)
+        loss = calc_loss(z, jacobian)
         val_log[k] = loss.item()
 
     if loss.item() < best_nll:
         best_nll = loss.item()
         save_checkpoint({'epoch': epoch, 'state_dict': net.state_dict()}, save_dir)
 
-    print('[Epoch %d/%d][Step: %d] Train Loss: %s Test Loss: %s' \
+    print('[Epoch %d/%d]\t[Step: %d]\tTrain Loss: %s\tTest Loss: %s' \
           % (epoch+1, n_epochs, k, np.mean(train_log[-10:]), val_log[k]))
 
 # Plotting each minibatch step
@@ -89,7 +89,7 @@ ax[1].set_xticks([])
 ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
+plt.savefig('./Hw2/Figures/Figure_4.pdf', bbox_inches='tight')
 plt.close()
 
 # Latent visualization
@@ -100,4 +100,23 @@ z = net.Latent(x, pi, mu, var).cpu().detach().numpy()
 
 plt.figure(3)
 plt.scatter(z[:, 0], z[:, 1], c=y)
-plt.savefig('./Hw2/Figures/Figure_3.pdf', bbox_inches='tight')
+plt.savefig('./Hw2/Figures/Figure_5.pdf', bbox_inches='tight')
+
+plt.figure(4)
+axis = np.linspace(-4, 4, 100)
+samples = np.array(np.meshgrid(axis, axis)).T.reshape([-1, 2])
+samples = torch.from_numpy(samples).to(device).float()
+with torch.no_grad():
+    z, jacobian = net(samples)
+
+# calc loss
+pdf = torch.exp(jacobian).cpu().numpy().reshape(100,100)
+plt.imshow(np.rot90(pdf))
+plt.set_xticks([])
+plt.set_yticks([])
+plt.set_title("Best distribution on validation set")
+
+
+prior = torch.distributions.MultivariateNormal(torch.zeros(2), torch.eye(2))
+z = prior.sample((125, 1))
+

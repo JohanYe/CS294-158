@@ -13,7 +13,7 @@ sns.set_style("darkgrid")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyperparams
-n_epochs = 2
+n_epochs = 5
 batch_size = 128
 lr = 1e-3
 train_log = []
@@ -48,7 +48,8 @@ optimizer = optim.Adam(net.parameters(),lr=lr)
 def calc_loss(logits, batch):
     # Divide by 2 for NLL per bit
     #print(logits.shape,batch.shape)
-    loss = F.cross_entropy(logits, batch.long(), reduction='sum') / batch_size / np.log(2.0) / (28 * 28 * 3)
+    loss = F.cross_entropy(logits, batch.long())#, reduction='sum') / batch_size / np.log(2.0) / (28 * 28 * 3)
+    print(loss)
     return loss
 
 
@@ -106,18 +107,18 @@ plt.savefig('./Hw1/Figures/Figure_8.pdf', bbox='tight')
 
 
 # Load best and generate
-load_checkpoint('./checkpoints/best.pth.tar', net)
-samples = np.zeros([100, 28, 28,3])
-for i in range(100):
-    with torch.no_grad():
-        image = np.transpose(net.sample_once().squeeze(0).cpu().detach(), [1,2,0])
-        samples[i] = image
-
-for i in range(10):
-    for j in range(10):
-        idx = i * 10 + j + 1
-        plt.subplot(10, 10, idx)
-        plt.imshow(samples[idx - 1] / 3)
-        plt.axis('off')
-plt.title("Samples from Best Model")
-plt.savefig('./Hw1/Figures/Figure_9.pdf', bbox='tight')
+# load_checkpoint('./checkpoints/best.pth.tar', net)
+# samples = np.zeros([100, 28, 28,3])
+# for i in range(100):
+#     with torch.no_grad():
+#         image = np.transpose(net.sample_once().squeeze(0).cpu().detach(), [1,2,0])
+#         samples[i] = image
+#
+# for i in range(10):
+#     for j in range(10):
+#         idx = i * 10 + j + 1
+#         plt.subplot(10, 10, idx)
+#         plt.imshow(samples[idx - 1] / 3)
+#         plt.axis('off')
+# plt.title("Samples from Best Model")
+# plt.savefig('./Hw1/Figures/Figure_9.pdf', bbox='tight')

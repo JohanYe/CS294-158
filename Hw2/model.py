@@ -35,7 +35,7 @@ class flow(nn.Module):
         mask_1 = torch.ones([hidden_size, 2]).to(device)
         mask_1[:, 1] = 0  # masking x2
         mask_2 = torch.ones([2*self.k, hidden_size]).to(device)
-        mask_2[:k, :] = 0 # Not sure what this does?
+        mask_2[:k, :] = 0  # Not entirely sure what this does
 
         # x1
         self.pi_1 = MaskedLinear(2, hidden_size)
@@ -87,3 +87,57 @@ class flow(nn.Module):
         return z
 
 
+class AffineCoupling(nn.Module):
+    """ Implementation inspired by 02456 Deep Learning """
+    def __init__(self, in_features=2, hidden_features=100):
+        super(AffineCoupling, self).__init__()
+
+        self.scale = nn.Sequential(
+            nn.Linear(in_features,hidden_features),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_features,hidden_features),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_features, hidden_features),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_features,in_features),
+            nn.Tanh(),
+        )
+
+        self.translate = nn.Sequential(
+            nn.Linear(in_features, hidden_features),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_features, hidden_features),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_features, hidden_features),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_features, in_features),
+        )
+
+    def forward(self, x, mask = None):
+        x_masked = mask * x
+        s = self.scale(x_masked) * (1 - mask)
+        t = self.translate(x_masked) * (1 - mask)
+
+        y = x_masked + (1 - mask) * (x * torch.exp(s) + t)  # Eq 9 RealNVP
+        jacobian = torch.sum(s, dim=1,keepdim=True)
+        return y, jacobian
+
+class RealNVP(nn.Module):
+    def __init__(self, in_features=2, hidden_features=100, AC_layers = 3):
+        super(RealNVP, self).__init__()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.layers = nn.ModuleList([AffineCoupling(in_features, hidden_features) for _ in range(AC_layers)])
+
+        # 2D mask
+        mask = torch.from_numpy(np.array([[0, 1], [1, 0]] * AC_layers).astype(np.float32))
+        self.register_buffer('mask', mask)
+
+    def forward(self,x):
+        """ Forward through all affine coupling layers"""
+        jacobian = torch.zeros_like(x)
+        for i in range(len(self.layers)):
+            x, log_determinant = self.layers[i](x, self.mask[i])
+            jacobian += log_determinant
+
+        return x, log_determinant
