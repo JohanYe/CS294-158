@@ -87,77 +87,192 @@ class flow(nn.Module):
         return z
 
 
-class AffineCoupling(nn.Module):
-    """ Implementation inspired by 02456 Deep Learning """
+# gave up on debugging this setup, should be close to working.
+# class AffineCoupling(nn.Module):
+#     """ Implementation inspired by 02456 Deep Learning """
+#
+#     def __init__(self, in_features=2, hidden_features=100):
+#         super(AffineCoupling, self).__init__()
+#
+#         self.scale = nn.Sequential(
+#             nn.Linear(in_features, hidden_features),
+#             nn.LeakyReLU(),
+#             nn.Linear(hidden_features, hidden_features),
+#             nn.LeakyReLU(),
+#             nn.Linear(hidden_features, in_features),
+#             nn.Tanh(),
+#         )
+#
+#         self.translate = nn.Sequential(
+#             nn.Linear(in_features, hidden_features),
+#             nn.LeakyReLU(),
+#             nn.Linear(hidden_features, hidden_features),
+#             nn.LeakyReLU(),
+#             nn.Linear(hidden_features, in_features),
+#         )
+#
+#     def forward(self, x, mask=None):
+#         """ forward propagation, in this case going from data to noise """
+#         x_masked = mask * x
+#         s = self.scale(x_masked) * (1 - mask)
+#         t = self.translate(x_masked) * (1 - mask)
+#
+#         z = (1 - mask) * (x - t) * torch.exp(-s) + x_masked
+#         # z = x_masked + (1 - mask) * (x * torch.exp(s) + t)  # Eq 9 RealNVP
+#         jacobian = torch.sum(s, dim=-1)#, keepdim=True)
+#         return z, jacobian
+#
+#     def inverse(self, x, mask=None):
+#         """ Inverse propagation, going from noise to data """
+#         x_masked = mask * x
+#         s = self.scale(x_masked) * (1 - mask)
+#         t = self.translate(x_masked) * (1 - mask)
+#
+#         # x = x_masked + (1 - mask) * (x * torch.exp(s) + t)
+#         x = x_masked + (1 - mask) * (x - t) * torch.exp(-s)  # Inverse propagation
+#         # jacobian = torch.sum(s, dim=-1)
+#         return x #, jacobian
+#
+#
+# class RealNVP(nn.Module):
+#     def __init__(self, in_features=2, hidden_features=100, AC_layers=3):
+#         super(RealNVP, self).__init__()
+#
+#         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#         self.layers = nn.ModuleList([AffineCoupling(in_features, hidden_features) for _ in range(AC_layers)])
+#
+#         # 2D mask - change which variable is masked each iteration to learn from both
+#         mask = torch.from_numpy(np.array([[0, 1], [1, 0]] * (AC_layers // 2)).astype(np.float32))
+#         self.register_buffer('mask', mask)
+#
+#     def forward(self, x):
+#         """ Forward through all affine coupling layers"""
+#         jacobian = torch.zeros(x.shape[0]).to(self.device)
+#         z = x
+#         # for i in range(len(self.layers)):
+#         #     z, log_determinant = self.layers[i](z, self.mask[i])
+#         #     jacobian += log_determinant  # jacobian, log det(ab) = log det(a) + log det(b)
+#         for mask, layer in zip(self.mask, self.layers):
+#             z, log_determinant_j = layer.forward(z, mask)
+#             jacobian -= log_determinant_j
+#
+#         return z, jacobian
+#
+#     def sample(self, num_samples, prior):
+#         x = prior.sample((num_samples, 1)).to(self.device)  # z is sampled, but then converted to x
+#         for i in range(len(self.layers)):
+#             x = self.layers[i].inverse(x, self.mask[i])
+#
+#         return x
 
-    def __init__(self, in_features=2, hidden_features=100):
-        super(AffineCoupling, self).__init__()
+class TransformNet(nn.Module):
+    """
+    Network that learns the scale and translate functions of the RealNVP paper
+    """
 
-        self.scale = nn.Sequential(
-            nn.Linear(in_features, hidden_features),
-            nn.LeakyReLU(),
-            nn.Linear(hidden_features, hidden_features),
-            nn.LeakyReLU(),
-            nn.Linear(hidden_features, in_features),
-            nn.Tanh(),
-        )
+    def __init__(self, hidden_size=100):
+        super(TransformNet, self).__init__()
 
-        self.translate = nn.Sequential(
-            nn.Linear(in_features, hidden_features),
-            nn.LeakyReLU(),
-            nn.Linear(hidden_features, hidden_features),
-            nn.LeakyReLU(),
-            nn.Linear(hidden_features, in_features),
-        )
+        self.hidden_size = hidden_size
+        self.layers = nn.Sequential(
+            nn.Linear(2, self.hidden_size),
+            nn.ReLU(),
+            nn.Linear(self.hidden_size, self.hidden_size),
+            nn.ReLU(),
+            nn.Linear(self.hidden_size, self.hidden_size),
+            nn.ReLU(),
+            nn.Linear(self.hidden_size, 2), )
 
-    def forward(self, x, mask=None):
-        """ forward propagation, in this case going from data to noise """
-        x_masked = mask * x
-        s = self.scale(x_masked) * (1 - mask)
-        t = self.translate(x_masked) * (1 - mask)
+    def forward(self, x):
+        return self.layers(x)
 
-        y = x_masked + (1 - mask) * (x * torch.exp(s) + t)  # Eq 9 RealNVP
-        jacobian = torch.sum(s, dim=-1)
-        return y, jacobian
 
-    def inverse(self, x, mask=None):
-        """ Inverse propagation, going from noise to data """
-        x_masked = mask * x
-        s = self.scale(x_masked) * (1 - mask)
-        t = self.translate(x_masked) * (1 - mask)
+class ActNorm(nn.Module):
+    """ Performs affine transformation using scale and bias """
 
-        x = x_masked + (1 - mask) * (x - t) * torch.exp(-s)  # Inverse propagation
-        # jacobian = torch.sum(s, dim=-1)
-        return x #, jacobian
+    def __init__(self, dimensions):
+        super(ActNorm, self).__init__()
+        self.scale = nn.Parameter(torch.ones([1, dimensions]))
+        self.translate = nn.Parameter(torch.zeros([1, dimensions]))
+
+    def initialize(self, x):
+        std = torch.std(x, dim=0, keepdim=True)
+        # Copy is used to save us for formatting tensor
+        self.scale.data.copy_(1.0 / std)
+        self.translate.data.copy_(-torch.mean(x * self.scale, dim=0, keepdim=True))
+
+    def forward(self, x, forward=True):
+        if forward:
+            log_determinant = torch.sum(torch.log(torch.abs(self.scale) + 1e-5), dim=1, keepdim=True)
+            # log_determinant = torch.sum(torch.log(self.scale), dim=-1, keepdim=True)
+            out = x * self.scale + self.translate
+            return out, log_determinant
+        else:
+            out = (x - self.translate) / self.scale
+            return out
+
+
+class CouplingLayer(nn.Module):
+
+    def __init__(self, mask, hidden_size=100, n_layers=1):
+        super(CouplingLayer, self).__init__()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.register_buffer("mask", mask)
+        self.TranslateNet = TransformNet(hidden_size).to(device)
+        self.ScaleNet = TransformNet(hidden_size).to(device)
+
+    def forward(self, x, forward=True):
+        z = self.mask * x
+        scale = torch.tanh(self.ScaleNet(z))
+        translate = self.TranslateNet(z)
+
+        if forward:  # Forward propagation (data -> noise)
+            z = z + (1 - self.mask) * (x * torch.exp(scale) + translate)  # Eq 9 RealNVP
+            log_determinant = torch.sum((1 - self.mask) * scale, dim=1, keepdim=True)
+            return z, log_determinant
+        else:  # inverse propagation  (noise -> data)
+            z = z + (1 - self.mask) * (x - translate) * torch.exp(-scale)
+            return z
 
 
 class RealNVP(nn.Module):
-    def __init__(self, in_features=2, hidden_features=100, AC_layers=3):
+
+    def __init__(self, n_layers=5):
         super(RealNVP, self).__init__()
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.layers = nn.ModuleList([AffineCoupling(in_features, hidden_features) for _ in range(AC_layers)])
+        self.n_layers = n_layers
+        mask = torch.Tensor([0, 1]).float()
+        self.layers = nn.ModuleList()
 
-        # 2D mask - change which variable is masked each iteration to learn from both
-        mask = torch.from_numpy(np.array([[0, 1], [1, 0]] * (AC_layers // 2)).astype(np.float32))
-        self.register_buffer('mask', mask)
+        for i in range(self.n_layers - 1):  # All but final layer
+            mask = 1 - mask
+            self.layers.append(CouplingLayer(mask))
+            self.layers.append(ActNorm(2))
+        self.layers.append(CouplingLayer(mask))
+        self.layers.to(self.device)
 
-    def forward(self, x):
-        """ Forward through all affine coupling layers"""
-        jacobian = torch.zeros(x.shape[0]).to(self.device)
-        z = x
-        # for i in range(len(self.layers)):
-        #     z, log_determinant = self.layers[i](z, self.mask[i])
-        #     jacobian += log_determinant  # jacobian, log det(ab) = log det(a) + log det(b)
-        for mask, layer in zip(self.mask, self.layers):
-            x, log_determinant_j = layer.forward(x, mask)
-            jacobian += log_determinant_j
+    def initialize(self, x):  # Initialize Actnorm layers
+        with torch.no_grad():
+            for layer in self.layers:
+                if isinstance(layer, ActNorm):
+                    layer.initialize(x)
+                x, _ = layer(x)
 
-        return z, jacobian
-
-    def sample(self, num_samples, prior):
-        x = prior.sample((num_samples, 1)).to(self.device)  # z is sampled, but then converted to x
-        for i in range(len(self.layers)):
-            x = self.layers[i].inverse(x, self.mask[i])
-
-        return x
+    def forward(self, x, forward=True):
+        if forward:
+            log_determinant_sum = torch.zeros([x.shape[0], 1]).float().to(self.device)
+            for layer in self.layers:
+                x, log_determinant = layer(x)
+                log_determinant_sum += log_determinant
+            out = torch.sigmoid(x)
+            # maybe add small constant before log to avoid undefined error.
+            log_determinant_sigmoid = torch.sum(torch.log(out * (1 - out + 1e-5)), dim=1, keepdim=True)
+            log_determinant_sum += log_determinant_sigmoid
+            return out, log_determinant_sum
+        else:
+            z = - torch.log(1 / x - 1)  # Reversing the sigmoid
+            for layer in reversed(self.layers):
+                z = layer(z, forward=False)
+            return z
