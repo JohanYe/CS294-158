@@ -41,7 +41,7 @@ class ResNet(nn):
 
 
 class AffineCouplingLayer(nn.Module):
-
+    """ Very similar to Ex1, but with Resnet block """
     def __init__(self, mask, channels_in, n_channels=32, n_blocks=4):
         super(AffineCouplingLayer, self).__init__()
 
@@ -65,6 +65,38 @@ class AffineCouplingLayer(nn.Module):
             log_scale = torch.tanh(log_scale)
             z = x_masked + (1 - self.mask) * (x - translate) / torch.exp(log_scale)
             return z
+
+class ActNorm(nn.Module):
+    """ Same as Ex1 except added flatten in log_determinant calculation"""
+
+    def __init__(self, c, h, w):
+        super(ActNorm, self).__init__()
+        self.scale = torch.ones([1, c, h, w])
+        self.translate = torch.ones([1, c, h, w])
+
+    def initialize(self, x):
+        std = torch.std(x, dim=0, keepdim=True)
+        # Copy is used to save us for formatting tensor
+        self.scale.data.copy_(1.0 / std)
+        self.translate.data.copy_(-torch.mean(x * self.scale, dim=0, keepdim=True))
+
+    def forward(self, x, Forward=True):
+        if Forward:
+            log_determinant = torch.sum(torch.Flatten(
+                torch.log(torch.abs(self.scale) + 1e-6), start_dim=1), dim=1, keepdim=True)
+            y = x * self.scale + self.translate
+            return y, log_determinant
+        else:
+            y = (x - self.translate) / self.scale
+            return y
+
+
+
+
+
+
+
+
 
 
 
