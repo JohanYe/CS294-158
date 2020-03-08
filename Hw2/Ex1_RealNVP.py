@@ -27,7 +27,6 @@ train_log = []
 val_log = {}
 best_nll = np.inf
 save_dir = './checkpoints/'
-prior = torch.distributions.MultivariateNormal(torch.zeros(2), torch.eye(2))  # standard normal
 
 
 # def calc_loss(z, jacobian, prior):
