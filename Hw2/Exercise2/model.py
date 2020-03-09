@@ -92,7 +92,8 @@ class ActNorm(nn.Module):
 
 
 
-
+# class SimpleRealNVP(nn.Module):
+#     def __init__(self, mask, channels, n_layers=):
 
 
 
