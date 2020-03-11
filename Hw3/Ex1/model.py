@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class VAE1(nn.Module):
     def __init__(self, n_layers=3, n_hidden=100, vector=True):
@@ -31,19 +32,20 @@ class VAE1(nn.Module):
             x = torch.relu(layer(x))
         mu = self.mu_enc(x)
         log_var = self.log_var_enc(x)
-        return mu, log_var
+        std = 0.5 * log_var.exp()
+        return mu, std
 
-    def reparameterize(self, mu, log_var):
-        std = 0.5*log_var.exp()
+    def reparameterize(self, mu, std):
         qz_Gx_dist = torch.distributions.Normal(loc=mu, scale=std)
-        qz_Gx = qz_Gx_dist.rsample()
-        return qz_Gx_dist, qz_Gx
+        z_Gx = qz_Gx_dist.rsample()
+        return qz_Gx_dist, z_Gx
 
     def VectorCovariance(self, x):
         for layer in self.decoder:
             x = torch.relu(layer(x))
         mu_dec = self.mu_dec(x)
         log_var = self.log_var_dec_vector(x)
+        std = 0.5 * log_var.exp()
         return mu_dec, log_var
 
     def ScalarCovariance(self, x):
@@ -59,10 +61,29 @@ class VAE1(nn.Module):
 
     def calc_loss(self, x):
         mu_enc, std_enc = self.encoder(x)
-        qz_Gx_dist, qz_Gx = self.reparameterize(mu_enc, std_enc)
+        qz_Gx_dist, z_Gx = self.reparameterize(mu_enc, std_enc)
 
-        
+        if self.vector:
+            mu_dec, std_dec = self.VectorCovariance(z_Gx)
+        else:
+            mu_dec, std_dec = self.ScalarCovariance(z_Gx)
 
+        # Find q(z|x)
+        log_QhGx = torch.sum(qz_Gx_dist.log_prob(z_Gx), -1)
+
+        # Evaluation in prior
+        p_z = torch.distributions.Normal(loc=0, scale=1)
+        log_Ph = torch.sum(p_z.log_prob(z_Gx), -1)
+
+        # Find p(x|z)
+        px_Gz =  torch.distributions.Normal(loc=mu_dec, scale=std_dec).log_prob(x)
+        log_PxGh = torch.sum(px_Gz, -1)
+
+        kl = log_Ph - log_QhGx
+        nll = log_PxGh.mean() / np.log(2) / 2
+        ELBO = nll + kl
+
+        return ELBO, kl, nll
 
 
 
