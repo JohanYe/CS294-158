@@ -19,7 +19,7 @@ save_dir = './checkpoints/'
 
 plt.figure(1)
 x, y = sample_data()
-plt.scatter(x[:, 0], x[:, 1], marker='.')
+plt.scatter(x[:, 0], x[:, 1], marker='.', c=y)
 plt.savefig('./Hw2/Figures/Figure_1.pdf')
 plt.close(1)
 train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size,

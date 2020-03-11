@@ -21,7 +21,7 @@ init_batch = torch.from_numpy(x_train).float().cuda()
 net.initialize(init_batch)
 # net = RealNVP(in_features=2, hidden_features=100, AC_layers=8).to(device)
 optimizer = optim.Adam(net.parameters(), lr=1e-4)
-n_epochs = 10
+n_epochs = 2
 train_log = []
 val_log = {}
 best_nll = np.inf
@@ -87,17 +87,25 @@ z = z.cpu().detach().numpy()
 ax[1].scatter(z[:, 0], z[:, 1], c=y)
 ax[1].set_title("Latent space")
 
-# Load best and generate + visualize latent space
-axis = np.linspace(-4, 4, 100)
-samples = np.array(np.meshgrid(axis, axis)).T.reshape([-1, 2])
-samples = torch.from_numpy(samples).to(device).float()  # GPU, tensor Conversion stuff
-with torch.no_grad():
-    z, jacobian = net(samples)
+samples = torch.distributions.uniform.Uniform(-4,4).sample([5000, 2])
+samples = samples.to(device).float()
+for i in reversed(range(len(net.layers))):
+    samples = net.layers[i](samples, forward=False)
+samples = samples.detach().cpu()
+ax[2].scatter(samples[:, 0], samples[:, 1], s=9)
 
-pdf = torch.exp(jacobian).cpu().numpy().reshape(100, 100)
-ax[2].imshow(np.rot90(pdf, 1))
-ax[2].set_xticks([])
-ax[2].set_yticks([])
-ax[2].set_title("Best distribution on validation set")
-plt.savefig('./Hw2/Figures/Figure_6.pdf', bbox_inches='tight')
+
+# Load best and generate + visualize latent space
+# axis = np.linspace(-4, 4, 100)
+# samples = np.array(np.meshgrid(axis, axis)).T.reshape([-1, 2])
+# samples = torch.from_numpy(samples).to(device).float()  # GPU, tensor Conversion stuff
+# with torch.no_grad():
+#     z, jacobian = net(samples)
+#
+# pdf = torch.exp(jacobian).cpu().numpy().reshape(100, 100)
+# ax[2].imshow(np.rot90(pdf, 1))
+# ax[2].set_xticks([])
+# ax[2].set_yticks([])
+# ax[2].set_title("Best distribution on validation set")
+# plt.savefig('./Hw2/Figures/Figure_6.pdf', bbox_inches='tight')
 

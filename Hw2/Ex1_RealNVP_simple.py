@@ -101,7 +101,7 @@ ax[0].set_title("p(z)")
 
 x_plot = net.sample(5000, prior)
 x_plot = x_plot.detach().cpu()
-ax[1].scatter(x_plot[:, :, 0], x_plot[:, :, 1])
+ax[1].scatter(x_plot[:, :, 0], x_plot[:, :, 1], s=9)
 ax[1].set_title('Generated samples from p(z)')
 plt.savefig('./Hw2/Figures/Figure_5.pdf', bbox_inches='tight')
 plt.close()
