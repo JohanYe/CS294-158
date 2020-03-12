@@ -2,96 +2,82 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-class VAE1(nn.Module):
+
+class VariationalAutoEncoder(nn.Module):
     def __init__(self, n_layers=3, n_hidden=100, vector=True):
-        super(VAE1, self).__init__()
+        super(VariationalAutoEncoder, self).__init__()
         self.n_layers = n_layers
         self.n_hidden = n_hidden
-        self.vector = vector
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.encoder = nn.ModuleList()
+        self.encode = nn.ModuleList()
+        self.out_features = 2 if vector else 1
 
-        self.encoder.append(nn.Linear(2, self.n_hidden))
+        self.encode.append(nn.Linear(2, self.n_hidden))
         for _ in range(n_layers - 2):
-            self.encoder.append(nn.Linear(self.n_hidden, self.n_hidden))
-
+            self.encode.append(nn.Linear(self.n_hidden, self.n_hidden))
         self.mu_enc = nn.Linear(self.n_hidden, 2)
         self.log_var_enc = nn.Linear(self.n_hidden, 2)
 
-        self.decoder = nn.ModuleList()
-        self.decoder.append(nn.Linear(2, self.n_hidden))
+        self.decode = nn.ModuleList()
+        self.decode.append(nn.Linear(2, self.n_hidden))
         for _ in range(n_layers - 2):
-            self.decoder.append(nn.Linear(self.n_hidden, self.n_hidden))
+            self.decode.append(nn.Linear(self.n_hidden, self.n_hidden))
         self.mu_dec = nn.Linear(self.n_hidden, 2)
-
-        self.log_var_dec_vector = nn.Linear(self.n_hidden, 2)
-        self.log_var_dec_scalar = nn.Linear(self.n_hidden, 1)
+        self.log_var_dec = nn.Linear(self.n_hidden, self.out_features)
 
     def encoder(self, x):
-        for layer in self.encoder:
+        for layer in self.encode:
             x = torch.relu(layer(x))
         mu = self.mu_enc(x)
         log_var = self.log_var_enc(x)
-        std = 0.5 * log_var.exp()
-        return mu, std
+        return mu, log_var
 
-    def reparameterize(self, mu, std):
+    def reparameterize(self, mu, log_var):
+        std = 0.5 * log_var.exp()
         qz_Gx_dist = torch.distributions.Normal(loc=mu, scale=std)
         z_Gx = qz_Gx_dist.rsample()
         return qz_Gx_dist, z_Gx
 
-    def VectorCovariance(self, x):
-        for layer in self.decoder:
+    def decoder(self, x):
+        for layer in self.decode:
             x = torch.relu(layer(x))
-        mu_dec = self.mu_dec(x)
-        log_var = self.log_var_dec_vector(x)
-        std = 0.5 * log_var.exp()
+        mu_dec = torch.sigmoid(self.mu_dec(x))
+        log_var = torch.sigmoid(self.log_var_dec(x))
         return mu_dec, log_var
 
-    def ScalarCovariance(self, x):
-        for layer in self.decoder:
-            x = layer(x)
-        mu_dec = self.mu_dec(x)
-        log_var = self.log_var_dec_scalar(x)
-        std = 0.5*log_var.exp()
-        return mu_dec, std
-
     def forward(self, x):
+        mu_enc, log_var = self.encoder(x)
+        z = self.reparameterize(mu_enc, log_var)
+        mu_dec, std_dec = self.decoder(z)
+        return mu_dec, std_dec
 
-
-    def calc_loss(self, x):
-        mu_enc, std_enc = self.encoder(x)
-        qz_Gx_dist, z_Gx = self.reparameterize(mu_enc, std_enc)
-
-        if self.vector:
-            mu_dec, std_dec = self.VectorCovariance(z_Gx)
-        else:
-            mu_dec, std_dec = self.ScalarCovariance(z_Gx)
+    def calc_loss(self, x, beta):
+        mu_enc, log_var_enc = self.encoder(x)
+        qz_Gx_dist, z_Gx = self.reparameterize(mu_enc, log_var_enc)
+        mu_dec, log_var_dec = self.decoder(z_Gx)
 
         # Find q(z|x)
-        log_QhGx = torch.sum(qz_Gx_dist.log_prob(z_Gx), -1)
+        # log_QhGx = qz_Gx_dist.log_prob(z_Gx).sum(dim=-1)
+        # log_QhGx = torch.sum(log_QhGx, -1)
+        log_QhGx = torch.sum(-0.5 * np.log(2 * np.pi) - x ** 2 / 2, dim=-1)
 
-        # Evaluation in prior
-        p_z = torch.distributions.Normal(loc=0, scale=1)
-        log_Ph = torch.sum(p_z.log_prob(z_Gx), -1)
+        # Find p(z)
+        # p_z = torch.distributions.Normal(
+        #     loc=torch.zeros([2]).to(self.device), scale=torch.ones([2]).to(self.device)).log_prob(z_Gx)
+        # log_Pz = torch.sum(p_z, -1)
+        log_Pz = torch.sum(-0.5 * z_Gx ** 2 - 0.5 * torch.log(2 * z_Gx.new_tensor(np.pi)), -1)
 
         # Find p(x|z)
-        px_Gz =  torch.distributions.Normal(loc=mu_dec, scale=std_dec).log_prob(x)
-        log_PxGh = torch.sum(px_Gz, -1)
+        # px_Gz = torch.distributions.Normal(loc=mu_dec, scale=std_dec).log_prob(x)
+        # log_PxGz = torch.sum(px_Gz, -1)
+        log_PxGz = torch.sum(-0.5 * np.log(2 * np.pi) - log_var_dec / 2 - (x - mu_dec) ** 2 / (2 * torch.exp(
+            log_var_dec)), -1)
 
-        kl = log_Ph - log_QhGx
-        nll = log_PxGh.mean() / np.log(2) / 2
-        ELBO = nll + kl
+
+        # nll and kl
+        print(log_PxGz.mean(), log_Pz.mean(), log_QhGx.mean())
+        nll = torch.mean(log_PxGz)
+        kl = torch.mean(log_Pz - log_QhGx)
+        ELBO = nll + kl*beta
 
         return ELBO, kl, nll
-
-
-
-
-
-
-
-
-
-
-
