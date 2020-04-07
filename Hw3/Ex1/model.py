@@ -4,7 +4,7 @@ import numpy as np
 
 
 class VariationalAutoEncoder(nn.Module):
-    def __init__(self, n_layers=2, n_hidden=100, vector=True):
+    def __init__(self, n_layers=4, n_hidden=100, vector=True):
         super(VariationalAutoEncoder, self).__init__()
 
         self.n_layers = n_layers
@@ -52,10 +52,9 @@ class VariationalAutoEncoder(nn.Module):
 
     def calc_loss(self, x, beta):
         mu_z, log_var_z = self.encoder(x)
+        log_var_z = nn.Softplus()(log_var_z)
         z_Gx = self.reparameterize(mu_z, log_var_z)
         mu_x, log_var_x = self.decoder(z_Gx)
-
-        log_var_z = nn.Softplus()(log_var_z)
         log_var_x = nn.Softplus()(log_var_x)
 
         # KL
@@ -67,4 +66,17 @@ class VariationalAutoEncoder(nn.Module):
         reconstruction_loss = reconstruction_loss.sum(dim=1).mean()
         # print(log_var_x)
 
-        return reconstruction_loss + kl, reconstruction_loss, kl
+        return reconstruction_loss + kl, kl, reconstruction_loss
+
+    def sample(self, n_samples, decoder_noise=True):
+        z = torch.distributions.Normal(0, 1).sample([n_samples, 2]).to(self.device)
+        mu_x, log_var_x = self.decoder(z)
+        log_var_x = nn.Softplus()(log_var_x)
+        std_x = (0.5*log_var_x).exp()
+        if decoder_noise:
+            x_recon = torch.randn_like(mu_x) * std_x + mu_x
+        else:
+            x_recon = mu_x
+        return x_recon
+
+
