@@ -13,7 +13,7 @@ ds2 = False
 k = 0
 beta = 0
 batch_size = 125
-n_epochs = 2
+n_epochs = 10
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = VariationalAutoEncoder(vector=True).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
@@ -47,6 +47,7 @@ else:
 # Training loop
 for epoch in range(n_epochs):
     for batch in train_loader:
+        net.train()
         batch = batch.to(device)
         loss, kl, nll = net.calc_loss(batch,beta)
         optimizer.zero_grad()
@@ -58,6 +59,7 @@ for epoch in range(n_epochs):
             beta += 0.001
 
     with torch.no_grad():
+        net.eval()
         loss, kl, nll = net.calc_loss(X_val, beta)
         val_log[k] = loss.item()
 
