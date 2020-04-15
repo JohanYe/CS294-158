@@ -13,9 +13,9 @@ ds2 = True
 k = 0
 beta = 0
 batch_size = 125
-n_epochs = 10
+n_epochs = 5
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-net = VariationalAutoEncoder(vector=True).to(device)
+net = VariationalAutoEncoder(vector=False).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
 train_log = {}
 val_log = {}
@@ -27,6 +27,8 @@ fig, ax = plt.subplots(1, 2)
 x1 = sample_data_1()
 ax[0].scatter(x1[:, 0], x1[:, 1])
 ax[0].set_title('Data set 1')
+ax[0].set_xlim(-17.5, 17.5)
+ax[0].set_ylim(-17.5, 17.5)
 
 # Data set 2
 x2 = sample_data_2()
@@ -53,17 +55,17 @@ for epoch in range(n_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        train_log[k] = [loss.item(), nll.item(), kl.item()]
+        train_log[k] = [loss.item(), kl.item(), nll.item()]
         batch_loss.append(loss.item())
 
         k += 1
         if 1 > beta:
-            beta += 0.001
+            beta += 0.0005
 
     with torch.no_grad():
         net.eval()
         loss, kl, nll = net.calc_loss(X_val, beta)
-        val_log[k] = [loss.item(), nll.item(), kl.item()]
+        val_log[k] = [loss.item(), kl.item(), nll.item()]
 
     if loss.item() < best_nll:
         best_nll = loss.item()
@@ -82,29 +84,19 @@ train_x_vals = np.arange(len(train_log))
 values = np.array(list(train_log.values()))
 loss_train, kl_train, recon_train = values[:, 0], values[:, 1], values[:, 2]
 
-fig, ax = plt.subplots(1, 3, figsize=(10, 5))
-ax[0].plot(train_x_vals, loss_train, label='Training ELBO')
-ax[0].plot(x_val, loss_val, label='Validation ELBO')
-ax[0].legend(loc='best')
-ax[0].set_title('Training Curve')
-ax[0].set_xlabel('Num Steps')
-ax[0].set_ylabel('NLL in bits per dim')
-
-ax[1].plot(train_x_vals, kl_train, label='Training KL')
-ax[1].plot(x_val, kl_val, label='Validation KL')
-ax[1].legend(loc='best')
-ax[1].set_title('Kullback-Leibler Curve')
-ax[1].set_xlabel('Num Steps')
-ax[1].set_ylabel('KL-Divergence')
-
-ax[2].plot(train_x_vals, recon_train, label='Training Reconstruction Error')
-ax[2].plot(x_val, loss_val, label='Validation Reconstruction Error')
-ax[2].legend(loc='best')
-ax[2].set_title('Reconstruction Error curve')
-ax[2].set_xlabel('Num Steps')
-ax[2].set_ylabel('Reconstruction Error')
-plt.savefig('Figure_1.pdf', bbox_inches='tight')
-
+plt.figure(2)
+plt.plot(train_x_vals, loss_train, label='Training ELBO')
+plt.plot(x_val, loss_val, label='Validation ELBO')
+plt.plot(train_x_vals, kl_train, label='Training KL')
+plt.plot(x_val, kl_val, label='Validation KL')
+plt.plot(train_x_vals, recon_train, label='Training Reconstruction Error')
+plt.plot(x_val, recon_val, label='Validation Reconstruction Error')
+plt.legend(loc='best')
+plt.title('Training Curve')
+plt.xlabel('Num Steps')
+plt.ylabel('NLL in bits per dim')
+plt.savefig('./Hw3/Figures/Figure_2.pdf', bbox_inches='tight')
+# plt.close()
 
 # Load best and generate
 load_checkpoint('./checkpoints/best.pth.tar', net)
@@ -112,12 +104,33 @@ samples = net.sample(1000, decoder_noise=False).detach().cpu().numpy()
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 ax[0].scatter(samples[:, 0], samples[:, 1])
 ax[0].set_title("No decoder noise")
-plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
+ax[0].set_xlim(-17.5, 17.5)
+ax[0].set_ylim(-17.5, 17.5)
 
 samples = net.sample(1000, decoder_noise=True).detach().cpu().numpy()
 ax[1].scatter(samples[:, 0], samples[:, 1])
 ax[1].set_title("Decoder noise")
-plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
+ax[1].set_xlim(-17.5, 17.5)
+ax[1].set_ylim(-17.5, 17.5)
+plt.savefig('./Hw3/Figures/Figure_3.pdf', bbox_inches='tight')
+
+reconstructions = net(X_val[:1000], noise=False).detach().cpu().numpy()
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+ax[0].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
+ax[0].scatter(reconstructions[:, 0], reconstructions[:, 1], label='Recon without noise')
+ax[0].set_title("No decoder noise")
+# ax[0].set_xlim(-17.5, 17.5)
+# ax[0].set_ylim(-17.5, 17.5)
+ax[0].legend(loc='best')
+
+reconstructions = net(X_val[:1000], noise=True).detach().cpu().numpy()
+ax[1].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
+ax[1].scatter(reconstructions[:, 0], reconstructions[:, 1], label='Recon with noise')
+ax[1].set_title("Decoder noise")
+# ax[1].set_xlim(-17.5, 17.5)
+# ax[1].set_ylim(-17.5, 17.5)
+ax[1].legend(loc='best')
+
 
 #
 # # Latent visualization
