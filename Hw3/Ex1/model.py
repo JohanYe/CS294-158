@@ -132,8 +132,9 @@ class IWAE(nn.Module):
         return z
 
     def decoder(self, x):
-        for layer in self.decode:
+        for layer in self.decode[:-1]:
             x = torch.relu(layer(x))
+        x = self.decode[-1](x)
         mu_dec, lv_dec = x.chunk(2, dim=2)
         return mu_dec, lv_dec
 
@@ -142,7 +143,6 @@ class IWAE(nn.Module):
         z = self.reparameterize(mu_enc, log_var_enc, n_samples=1)
         mu_dec, lv_dec = self.decoder(z)
         x_recon = self.reparameterize(mu_dec, lv_dec, n_samples=1).squeeze(1)
-        print(x_recon.shape)
         return x_recon
 
     def calc_loss(self, x, beta, num_samples=1):
@@ -158,7 +158,7 @@ class IWAE(nn.Module):
         mu_z, log_var_z = mu_z.unsqueeze(1), log_var_z.unsqueeze(1)
         log_qz = - 0.5 * np.log(2*np.pi) - 0.5*log_var_z - (z_Gx - mu_z)**2 / (2 * log_var_z.exp() + 1e-5)
         log_pz = - 0.5 * np.log(2*np.pi) - 0.5*1 - (z_Gx - 0)**2 / (2 * np.exp(1) + 1e-5)  # evaluation in N(0,1)
-        kl = torch.mean(torch.sum(log_qz - log_pz, dim=2))  # logsumexp
+        kl = torch.mean(torch.sum(log_qz - log_pz, dim=2))/np.log(2)/2  # logsumexp
 
         return reconstruction_loss + kl * beta, kl, reconstruction_loss
 

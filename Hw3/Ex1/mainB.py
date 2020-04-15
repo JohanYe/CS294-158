@@ -11,7 +11,7 @@ sns.set_style("darkgrid")
 k = 0
 beta = 0
 batch_size = 125
-n_epochs = 3
+n_epochs = 10
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = IWAE(n_hidden=128).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
@@ -37,7 +37,7 @@ for epoch in range(n_epochs):
     for batch in train_loader:
         net.train()
         batch = batch.to(device)
-        loss, kl, nll = net.calc_loss(batch, beta)
+        loss, kl, nll = net.calc_loss(batch, beta, num_samples=1)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
