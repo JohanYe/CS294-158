@@ -11,7 +11,7 @@ sns.set_style("darkgrid")
 k = 0
 beta = 0
 batch_size = 125
-n_epochs = 10
+n_epochs = 1
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = IWAE(n_hidden=128).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
@@ -37,7 +37,7 @@ for epoch in range(n_epochs):
     for batch in train_loader:
         net.train()
         batch = batch.to(device)
-        loss, kl, nll = net.calc_loss(batch, beta, num_samples=1)
+        loss, kl, nll = net.calc_loss(batch, beta, num_samples=100)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -70,15 +70,18 @@ train_x_vals = np.arange(len(train_log))
 values = np.array(list(train_log.values()))
 loss_train, kl_train, recon_train = values[:, 0], values[:, 1], values[:, 2]
 
-plt.figure(2)
-plt.plot(train_x_vals, loss_train, label='Training ELBO')
-plt.plot(x_val, loss_val, label='Validation ELBO')
-plt.plot(train_x_vals, kl_train, label='Training KL')
-plt.plot(x_val, kl_val, label='Validation KL')
-plt.plot(train_x_vals, recon_train, label='Training Reconstruction Error')
-plt.plot(x_val, recon_val, label='Validation Reconstruction Error')
+fig, ax = plt.subplots(1,3, figsize=(10,5))
+ax[0].plot(train_x_vals, loss_train, label='Training ELBO')
+ax[0].plot(x_val, loss_val, label='Validation ELBO')
+ax[0].set_title('Training Curve')
+ax[1].plot(train_x_vals, kl_train, label='Training KL')
+ax[1].plot(x_val, kl_val, label='Validation KL')
+ax[1].set_title('Kullback-Leibler Divergence Curve')
+ax[2].plot(train_x_vals, recon_train, label='Training Reconstruction Error')
+ax[2].plot(x_val, recon_val, label='Validation Reconstruction Error')
+ax[2].set_title('Reconstruction Error Curve')
 plt.legend(loc='best')
-plt.title('Training Curve')
+
 plt.xlabel('Num Steps')
 plt.ylabel('NLL in bits per dim')
 plt.savefig('./Hw3/Figures/Figure_5.pdf', bbox_inches='tight')
@@ -92,7 +95,7 @@ plt.scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
 plt.scatter(reconstructions[:, 0], reconstructions[:, 1], label='Recon with noise')
 
 samples = net.sample(1000).detach().cpu().numpy()
-# plt.scatter(samples[:, 0], samples[:, 1], label='Sampled samples')
+plt.scatter(samples[:, 0], samples[:, 1], label='Sampled samples')
 plt.legend(loc='best')
 plt.savefig('./Hw3/Figures/Figure_6.pdf', bbox_inches='tight')
 

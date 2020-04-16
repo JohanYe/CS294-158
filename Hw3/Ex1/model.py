@@ -149,23 +149,28 @@ class IWAE(nn.Module):
         mu_z, log_var_z = self.encoder(x)
         z_Gx = self.reparameterize(mu_z, log_var_z, num_samples)
         mu_x, log_var_x = self.decoder(z_Gx)
-        x = x.unsqueeze(1)
+        x = x.unsqueeze(1).repeat(1,num_samples,1)
+        # print(mu_x.shape, log_var_x.shape, x.shape)
+
 
         reconstruction_loss = - 0.5 * np.log(2*np.pi) - 0.5*log_var_x - (x - mu_x)**2 / (2 * log_var_x.exp() + 1e-5)
         reconstruction_loss = torch.sum(-reconstruction_loss, dim=1).mean() / np.log(2) / 2
+
 
         # IWAE KL:
         mu_z, log_var_z = mu_z.unsqueeze(1), log_var_z.unsqueeze(1)
         log_qz = - 0.5 * np.log(2*np.pi) - 0.5*log_var_z - (z_Gx - mu_z)**2 / (2 * log_var_z.exp() + 1e-5)
         log_pz = - 0.5 * np.log(2*np.pi) - 0.5*1 - (z_Gx - 0)**2 / (2 * np.exp(1) + 1e-5)  # evaluation in N(0,1)
         kl = torch.mean(torch.sum(log_qz - log_pz, dim=2))/np.log(2)/2  # logsumexp
+        free_bit = np.max((kl, 1))
 
-        return reconstruction_loss + kl * beta, kl, reconstruction_loss
+        return reconstruction_loss + free_bit, kl, reconstruction_loss
 
     def sample(self, n_samples):
         z = torch.distributions.Normal(0, 1).sample([n_samples, 2]).to(self.device)
-        for layer in self.decode:
-            z = torch.relu(layer(z))
+        for layer in self.decode[:-1]:
+            x = torch.relu(layer(x))
+        x = self.decode[-1](x)
         mu_dec, lv_dec = z.chunk(2, dim=1)
         std_x = (0.5 * lv_dec).exp()
         x_sampled = torch.randn_like(mu_dec) * std_x + mu_dec
