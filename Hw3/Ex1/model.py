@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import torch.distributions as td
+from Hw3.Ex1.Utils import *
 
 
 class VariationalAutoEncoder(nn.Module):
@@ -63,6 +65,7 @@ class VariationalAutoEncoder(nn.Module):
             return mu_dec
 
     def calc_loss(self, x, beta):
+
         mu_z, log_var_z = self.encoder(x)
         # log_var_z = nn.Softplus()(log_var_z)
         z_Gx = self.reparameterize(mu_z, log_var_z)
@@ -75,7 +78,8 @@ class VariationalAutoEncoder(nn.Module):
         kl = torch.mean(-0.5 * torch.sum(1 + log_var_z - mu_z ** 2 - torch.exp(log_var_z), dim=1))
 
         # Recon_loss - negative 1 is multiplied due to optimizing on the negative reconstruction error.
-        reconstruction_loss = - 0.5 * np.log(2*np.pi) - 0.5*log_var_x - (x - mu_x)**2 / (2 * log_var_x.exp() + 1e-5)
+        reconstruction_loss = - 0.5 * np.log(2 * np.pi) - 0.5 * log_var_x - (x - mu_x) ** 2 / (
+                2 * log_var_x.exp() + 1e-5)
         reconstruction_loss = torch.sum(-reconstruction_loss, dim=1).mean() / np.log(2) / 2
         # reconstruction_loss = 0.5 * np.log(2 * np.pi) + 0.5 * log_var_x + (x - mu_x) ** 2 * log_var_x.exp() * 0.5
         # reconstruction_loss = reconstruction_loss.sum(1).mean()
@@ -94,9 +98,10 @@ class VariationalAutoEncoder(nn.Module):
             x_recon = mu_x
         return x_recon
 
-class IWAE(nn.Module):
+
+class IWAE1(nn.Module):
     def __init__(self, n_layers=4, n_hidden=64):
-        super(IWAE, self).__init__()
+        super(IWAE1, self).__init__()
 
         self.n_layers = n_layers
         self.n_hidden = n_hidden
@@ -118,16 +123,12 @@ class IWAE(nn.Module):
         for layer in self.encode[:-1]:
             x = torch.relu(layer(x))
         x = self.encode[-1](x)
-        mu, log_var = x.chunk(2, dim=1)
+        mu, log_var = x.chunk(2, dim=-1)
         return mu, log_var
 
     def reparameterize(self, mu, log_var, n_samples):
-
         std = torch.exp(0.5 * log_var)
-        if len(mu.shape) < 3:
-            mu = mu.unsqueeze(1)
-            std = std.unsqueeze(1)
-        eps = torch.randn(mu.shape[0], n_samples, mu.shape[2]).to(self.device).detach()
+        eps = torch.randn_like(mu)
         z = eps * std + mu
         return z
 
@@ -135,7 +136,9 @@ class IWAE(nn.Module):
         for layer in self.decode[:-1]:
             x = torch.relu(layer(x))
         x = self.decode[-1](x)
-        mu_dec, lv_dec = x.chunk(2, dim=2)
+        mu_dec, lv_dec = x.chunk(2, dim=-1)
+        # mu_dec = torch.sigmoid(mu_dec)
+        # lv_dec = torch.sigmoid(lv_dec)
         return mu_dec, lv_dec
 
     def forward(self, x, ):
@@ -146,34 +149,149 @@ class IWAE(nn.Module):
         return x_recon
 
     def calc_loss(self, x, beta, num_samples=1):
+        x = x.unsqueeze(0).repeat(num_samples, 1, 1)
         mu_z, log_var_z = self.encoder(x)
         z_Gx = self.reparameterize(mu_z, log_var_z, num_samples)
         mu_x, log_var_x = self.decoder(z_Gx)
-        x = x.unsqueeze(1).repeat(1,num_samples,1)
-        # print(mu_x.shape, log_var_x.shape, x.shape)
 
-
-        reconstruction_loss = - 0.5 * np.log(2*np.pi) - 0.5*log_var_x - (x - mu_x)**2 / (2 * log_var_x.exp() + 1e-5)
-        reconstruction_loss = torch.sum(-reconstruction_loss, dim=1).mean() / np.log(2) / 2
-
+        # # reconstruction_loss = - 0.5 * np.log(2 * np.pi) - 0.5 * log_var_x - (x - mu_x) ** 2 / (
+        # #             2 * log_var_x.exp() + 1e-5)
+        reconstruction_loss = log_normal(x, mu_x, log_var_x)
+        reconstruction_loss = torch.mean(torch.sum(-reconstruction_loss, dim=-1)) / np.log(2) / 2
 
         # IWAE KL:
-        mu_z, log_var_z = mu_z.unsqueeze(1), log_var_z.unsqueeze(1)
-        log_qz = - 0.5 * np.log(2*np.pi) - 0.5*log_var_z - (z_Gx - mu_z)**2 / (2 * log_var_z.exp() + 1e-5)
-        log_pz = - 0.5 * np.log(2*np.pi) - 0.5*1 - (z_Gx - 0)**2 / (2 * np.exp(1) + 1e-5)  # evaluation in N(0,1)
-        kl = torch.mean(torch.sum(log_qz - log_pz, dim=2))/np.log(2)/2  # logsumexp
-        free_bit = np.max((kl, 1))
+        mu_standard = torch.zeros_like(mu_z)
+        lv_standard = torch.ones_like(log_var_z)
+        log_qz = log_normal(z_Gx, mu_z, log_var_z)
+        log_pz = log_normal(z_Gx, mu_standard, lv_standard)
+        # log_qz = - 0.5 * np.log(2 * np.pi) - 0.5 * log_var_z - (z_Gx - mu_z) ** 2 / (2 * log_var_z.exp() + 1e-5)
+        # log_pz = - 0.5 * np.log(2 * np.pi) - 0.5 * 1 - (z_Gx - 0) ** 2 / (2 * np.exp(1) + 1e-5)  # evaluation in N(0,1)
+        kl = torch.mean(torch.sum(log_qz - log_pz, dim=-1)) / np.log(2) / 2  # logsumexp
 
-        return reconstruction_loss + free_bit, kl, reconstruction_loss
+        return reconstruction_loss + kl * beta, kl, reconstruction_loss
 
     def sample(self, n_samples):
         z = torch.distributions.Normal(0, 1).sample([n_samples, 2]).to(self.device)
         for layer in self.decode[:-1]:
-            x = torch.relu(layer(x))
-        x = self.decode[-1](x)
-        mu_dec, lv_dec = z.chunk(2, dim=1)
+            z = torch.relu(layer(z))
+        x = self.decode[-1](z)
+        mu_dec, lv_dec = x.chunk(2, dim=1)
         std_x = (0.5 * lv_dec).exp()
         x_sampled = torch.randn_like(mu_dec) * std_x + mu_dec
         return x_sampled
 
+    def get_latent(self, x):
+        mu_enc, log_var_enc = self.encoder(x)
+        z = self.reparameterize(mu_enc, log_var_enc, n_samples=1)
+        return z.squeeze(1)
 
+
+class PytorchIWAE(nn.Module):
+    # Network uses in-built pytorch function for variational inference, instead of having to explicitly
+    # calculate it
+    def __init__(self, num_hidden1, num_hidden2, latent, in_dim=784):
+        super(PytorchIWAE, self).__init__()
+        self.latent = latent
+        self.out_dec = in_dim
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.block1 = nn.Sequential(
+            nn.Linear(in_features=in_dim, out_features=num_hidden1),
+            nn.ReLU(),
+            nn.Linear(num_hidden1, num_hidden2),
+            nn.ReLU(),
+        )
+        self.mu_enc = nn.Linear(in_features=num_hidden2, out_features=self.latent)
+        self.lvar_enc = nn.Linear(in_features=num_hidden2, out_features=self.latent)
+
+        self.block2 = nn.Sequential(
+            nn.Linear(in_features=self.latent, out_features=num_hidden2),
+            nn.ReLU(),
+            nn.Linear(num_hidden2, num_hidden1),
+            nn.ReLU(),
+        )
+
+        self.mu_dec = nn.Linear(in_features=num_hidden1, out_features=self.out_dec)
+        self.lvar_dec = nn.Linear(in_features=num_hidden1, out_features=self.out_dec)
+
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+
+    def encoder(self, x):
+        x = self.block1(x)
+        mu = self.mu_enc(x)
+        log_var = self.lvar_enc(x)
+        return mu, log_var
+
+    def decoder(self, z):
+        h = self.block2(z)
+
+        mu_x = torch.sigmoid(self.mu_dec(h))
+        var_x = torch.sigmoid(self.lvar_dec(h))  # Stability reasons
+
+        return (mu_x, var_x)
+
+    def reparameterize(self, mu, std):
+        qz_Gx_obs = td.Normal(loc=mu, scale=std)
+        # find z|x
+        z_Gx = qz_Gx_obs.rsample()
+        return z_Gx, qz_Gx_obs
+
+    def forward(self, x, train=True):
+        mu_z, lv_z = self.encoder(x)
+        if train:
+            std_z = lv_z.mul(0.5).exp_()
+            z, _ = self.reparameterize(mu_z, std_z)
+        else:
+            z = mu_z
+        mu_x, lv_x = self.decoder(z)
+        std_x = lv_x.mul_(0.5).exp()
+        x_recon = td.Normal(loc=mu_x, scale=std_x).sample()
+        # can also show mu
+        return x_recon
+
+    def calc_loss(self, x, beta, num_samples=1):
+        x = x.expand(num_samples, x.shape[0], -1)
+        # Encode
+        mu_enc, log_var_enc = self.encoder(x)
+        std_enc = torch.exp(0.5 * log_var_enc)
+
+        # Reparameterize:
+        z_Gx, qz_Gx_obs = self.reparameterize(mu_enc, std_enc)
+        mu_dec, log_var_dec = self.decoder(z_Gx)
+
+        # Find q(z|x)
+        log_QhGx = qz_Gx_obs.log_prob(z_Gx)
+        log_QhGx = torch.sum(log_QhGx, -1)
+
+        # Find p(z)
+        mu_prior = torch.zeros(self.latent).to(self.device)
+        std_prior = torch.ones(self.latent).to(self.device)
+        p_z = td.Normal(loc=mu_prior, scale=std_prior)
+        log_Ph = torch.sum(p_z.log_prob(z_Gx), -1)
+
+        # Find p(x|z)
+        std_dec = log_var_dec.mul(0.5).exp_()
+        px_Gz = td.Normal(loc=mu_dec, scale=std_dec).log_prob(x)
+        log_PxGh = torch.sum(px_Gz, -1)
+        # print(log_PxGh, log_Ph, log_QhGx)
+        # Calculate loss
+
+        w = log_PxGh / np.log(2) / 2 + (log_Ph - log_QhGx) / np.log(2) / 2
+        loss = -torch.mean(torch.logsumexp(w, 0))
+
+        return loss, -torch.mean(torch.logsumexp(log_Ph - log_QhGx, 0)), -torch.mean(torch.logsumexp(log_PxGh, 0))
+
+    def sample(self, num_samples):
+        z_dist = td.Normal(loc=torch.zeros([num_samples, self.latent]), scale=1)
+        z_sample = z_dist.sample().unsqueeze(0).to(self.device)
+        mu_x, lv_x = self.decoder(z_sample)
+        std_x = lv_x.mul_(0.5).exp()
+        x_recon = mu_x + std_x * torch.randn_like(mu_x)
+        return x_recon.squeeze(0)
+
+    def get_latent(self, x):
+        mu_enc, log_var_enc = self.encoder(x)
+        z, _ = self.reparameterize(mu_enc, log_var_enc)
+        return z

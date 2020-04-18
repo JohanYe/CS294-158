@@ -32,6 +32,11 @@ def sample_data_3():
     return data_x[perm], data_y[perm]
 
 
+def log_normal(x, mean, log_var, eps=1e-5):
+    c = - 0.5 * np.log(2*np.pi)
+    return c - log_var/2 - (x - mean)**2 / (2 * torch.exp(log_var) + eps)
+
+
 def save_checkpoint(state, save_dir, ckpt_name='best.pth.tar'):
     file_path = os.path.join(save_dir, ckpt_name)
     if not os.path.exists(save_dir):

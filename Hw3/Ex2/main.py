@@ -1,37 +1,40 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from Hw3.Ex1.Utils import *
-from Hw3.Ex1.model import *
+from Hw3.Ex2.Utils import *
+from Hw3.Ex2.model import *
 import seaborn as sns
 import torch.optim as optim
+import pickle as pkl
+import torchvision
 
 sns.set_style("darkgrid")
 
 k = 0
 beta = 0
-batch_size = 128
+batch_size = 64
 n_epochs = 40
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = IWAE1(n_hidden=128).to(device)
-# net = PytorchIWAE(num_hidden1=100, num_hidden2=100, latent=2, in_dim=2).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
 train_log = {}
 val_log = {}
 best_nll = np.inf
 save_dir = './checkpoints/'
 
-# Data set 1
-x3, y3 = sample_data_3()
-# x3, y3 = x3[:10000], y3[:10000]
-plt.figure(1)
-plt.scatter(x3[:, 0], x3[:, 1])
-plt.title('Data set 3')
-plt.savefig('./Hw3/Figures/Figure_4.pdf')
-train_loader = torch.utils.data.DataLoader(torch.from_numpy(x3[:int(len(x3) * 0.8)]).float(), batch_size=batch_size,
-                                           shuffle=True)
-X_val = torch.from_numpy(x3[int(len(x3) * 0.8):]).to(device).float()
-y_val = y3[int(len(y3) * 0.8):]
+# Loading data
+train_loader = torch.utils.data.DataLoader(SVHNDataset('train'), batch_size, shuffle=True)
+val_loader = torch.utils.data.DataLoader(SVHNDataset('valid'), batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(SVHNDataset('test'), batch_size, shuffle=True)
+
+
+quick_plot = next(iter(train_loader))
+img_grid = torchvision.utils.make_grid(quick_plot.cpu(), nrow=8).numpy()
+plt.figure(figsize=(12, 12))
+plt.imshow(np.transpose(img_grid, (1, 2, 0)))
+plt.axis('off')
+plt.savefig('./Hw3/Figures/Figure_7.pdf')
+
 # Training loop
 for epoch in range(n_epochs):
     batch_loss = []
@@ -85,7 +88,7 @@ plt.legend(loc='best')
 
 plt.xlabel('Num Steps')
 plt.ylabel('NLL in bits per dim')
-plt.savefig('./Hw3/Figures/Figure_5.pdf', bbox_inches='tight')
+# plt.savefig('./Hw3/Figures/Figure_5.pdf', bbox_inches='tight')
 # plt.close()
 
 # Load best and generate
@@ -98,10 +101,10 @@ plt.scatter(reconstructions[:, 0], reconstructions[:, 1], label='Recon with nois
 samples = net.sample(1000).detach().cpu().numpy()
 plt.scatter(samples[:, 0], samples[:, 1], label='Sampled samples')
 plt.legend(loc='best')
-plt.savefig('./Hw3/Figures/Figure_6.pdf', bbox_inches='tight')
+# plt.savefig('./Hw3/Figures/Figure_6.pdf', bbox_inches='tight')
 
 # Latent visualization
 z = net.get_latent(X_val[:1000]).detach().cpu().numpy()
 plt.figure(4)
 plt.scatter(z[:, 0], z[:, 1], c=y_val[:1000])
-plt.savefig('./Hw2/Figures/Figure_7.pdf', bbox_inches='tight')
+# plt.savefig('./Hw2/Figures/Figure_7.pdf', bbox_inches='tight')
