@@ -13,7 +13,7 @@ ds2 = True
 k = 0
 beta = 0
 batch_size = 125
-n_epochs = 5
+n_epochs = 15
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = VariationalAutoEncoder(vector=False).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
@@ -102,34 +102,43 @@ plt.savefig('./Hw3/Figures/Figure_2.pdf', bbox_inches='tight')
 load_checkpoint('./checkpoints/best.pth.tar', net)
 samples = net.sample(1000, decoder_noise=False).detach().cpu().numpy()
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-ax[0].scatter(samples[:, 0], samples[:, 1])
+ax[0].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
+ax[0].scatter(samples[:, 0], samples[:, 1], label='Sampled')
 ax[0].set_title("No decoder noise")
 ax[0].set_xlim(-17.5, 17.5)
 ax[0].set_ylim(-17.5, 17.5)
 
 samples = net.sample(1000, decoder_noise=True).detach().cpu().numpy()
-ax[1].scatter(samples[:, 0], samples[:, 1])
+ax[1].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
+ax[1].scatter(samples[:, 0], samples[:, 1], label='Sampled')
 ax[1].set_title("Decoder noise")
 ax[1].set_xlim(-17.5, 17.5)
 ax[1].set_ylim(-17.5, 17.5)
-plt.savefig('./Hw3/Figures/Figure_3.pdf', bbox_inches='tight')
+if ds1:
+    plt.savefig('./Hw3/Figures/Figure_3ds1.pdf', bbox_inches='tight')
+else:
+    plt.savefig('./Hw3/Figures/Figure_3ds2.pdf', bbox_inches='tight')
 
 reconstructions = net(X_val[:1000], noise=False).detach().cpu().numpy()
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 ax[0].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
 ax[0].scatter(reconstructions[:, 0], reconstructions[:, 1], label='Recon without noise')
 ax[0].set_title("No decoder noise")
-# ax[0].set_xlim(-17.5, 17.5)
-# ax[0].set_ylim(-17.5, 17.5)
+ax[0].set_xlim(-17.5, 17.5)
+ax[0].set_ylim(-17.5, 17.5)
 ax[0].legend(loc='best')
 
 reconstructions = net(X_val[:1000], noise=True).detach().cpu().numpy()
 ax[1].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
 ax[1].scatter(reconstructions[:, 0], reconstructions[:, 1], label='Recon with noise')
 ax[1].set_title("Decoder noise")
-# ax[1].set_xlim(-17.5, 17.5)
-# ax[1].set_ylim(-17.5, 17.5)
+ax[1].set_xlim(-17.5, 17.5)
+ax[1].set_ylim(-17.5, 17.5)
 ax[1].legend(loc='best')
+if ds1:
+    plt.savefig('./Hw3/Figures/Figure_4ds1.pdf', bbox_inches='tight')
+else:
+    plt.savefig('./Hw3/Figures/Figure_4ds2.pdf', bbox_inches='tight')
 
 
 #
