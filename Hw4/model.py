@@ -64,7 +64,7 @@ class UpResnetBlock(nn.Module):
 class Generator(nn.Module):
     def __init__(self, noise_dim=128, n_filters=128):
         super(Generator, self).__init__()
-
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.noise_dim = noise_dim
         self.filters = n_filters
         self.dense_init = nn.Linear(noise_dim, 4 * 4 * n_filters)
@@ -79,7 +79,7 @@ class Generator(nn.Module):
         )
 
     def forward(self, bs):
-        z = torch.randn(bs, self.noise_dim)
+        z = torch.randn(bs, self.noise_dim).to(self.device)
         out = self.dense_init(z)
         out = out.reshape(-1, 128, 4, 4)
         out = self.layers(out)
@@ -100,7 +100,7 @@ class DownsamplingSpaceToDepth(nn.Module):
         down_width = int(or_width / self.block_size)
         down_channels = int(or_channels * self.block_size_sq)
         split = x.split(self.block_size, dim=2)
-        stack = [x.reshape(bs, or_height, or_channels) for x in split]
+        stack = [x.reshape(bs, down_height, down_channels) for x in split]
         output = torch.stack(stack, dim=1)
         output = output.permute(0, 3, 2, 1)
         return output.contiguous()
@@ -113,13 +113,13 @@ class Downsample_Conv2d(nn.Module):
         self.kernel_size = ks
         self.padding = padding
 
-        self.conv = nn.Conv2d(c_in, c_out, kernel_size=ks, stride=1, padding=1)
+        self.conv = nn.Conv2d(c_in, c_out, kernel_size=ks, stride=1, padding=padding,bias=True)
         self.space_to_depth = DownsamplingSpaceToDepth(2)
 
     def forward(self, x):
         x = self.space_to_depth(x)
-        x = torch.sum(x.chunk(4, dim=1)) / 4.0
-        print('WTF SUM:', x.shape)
+        # TODO: ASK RASMUS
+        x = sum(x.chunk(4, dim=1)) / 4.0
         x = self.conv(x)
         return x
 
@@ -153,7 +153,7 @@ class ResnetBlock(nn.Module):
             nn.ReLU(),
             nn.Conv2d(c_in, filters, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Conv2d(filters, filters, kernel_size=3, stride=1, padding=1)
+            nn.Conv2d(filters, filters, kernel_size=3, stride=1,padding=1)
         )
 
     def forward(self, x):
@@ -175,7 +175,6 @@ class Discriminator(nn.Module):
         self.fc = nn.Linear(128, 1)
 
     def forward(self, x):
-
         x = self.layers(x)
         x = torch.sum(x, dim=[2, 3])  # TODO: WHY ARE THESE SUMMED?
         x = self.fc(x)

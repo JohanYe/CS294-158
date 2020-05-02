@@ -2,6 +2,7 @@ import torch
 import torchvision
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tqdm import tqdm
 from Hw4.utils import *
 from Hw4.model import *
 
@@ -14,64 +15,88 @@ transform = transforms.Compose(
     [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
+train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=4)
 testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=4)
 
 # Show some samples
-x_plot, labels = next(iter(trainloader))
+x_plot, labels = next(iter(train_loader))
 imshow(torchvision.utils.make_grid(x_plot[:100], nrow=10))
 plt.savefig('./Hw4/figures/figure_1.pdf',bbox_inches='tight')
+plt.close()
 
+
+# Hyperparams
 k = 0
-g = Generator()
-optimizer = torch.optim.Adam(net.parameters(), lr=2e-4, betas=(0, 0.9))
+epoch = 0
 n_epochs = 2
 train_log = []
 val_log = {}
 best_nll = np.inf
 save_dir = './checkpoints/'
+critic_iter = 0
+n_critic = 5
+
+# Generator
+g = Generator().to(device)
+g_optimizer = torch.optim.Adam(g.parameters(), lr=2e-4, betas=(0, 0.9))
+g_scheduler = torch.optim.lr_scheduler.LambdaLR(g_optimizer, lambda epoch: (n_epochs - epoch) / n_epochs, last_epoch=-1)
+
+# Discriminator
+d = Discriminator().to(device)
+d_optimizer = torch.optim.Adam(d.parameters(), lr=2e-4, betas=(0, 0.9))
+d_scheduler = torch.optim.lr_scheduler.LambdaLR(d_optimizer, lambda epoch: (n_epochs - epoch) / n_epochs, last_epoch=-1)
 
 
-def calc_loss(z, jacobian, prior):
-    """
-    Evaluate loss in prior distirbution
-    :param z: affine_coupled data from RealNVP
-    :param jacobina: Jacobian from RealNVP
-    :return: loss
-    """
-    z = z.cpu()
-    jacobian = jacobian.cpu().squeeze()
+def gradient_penalty(x_real, x_fake, LAMBDA = 10):
 
-    # Evaluation in normal dist
-    loss = prior.log_prob(z) + jacobian
-    loss = -loss.mean() / np.log(2)
-    return loss
+    #Gradient penalty according to improving WGAN training
+    alpha = torch.rand(x_real.size(0), 1, 1, 1).expand_as(x_real).to(device)
+    interpolates = (alpha * x_real + ((1 - alpha) * x_fake)).requires_grad_(True)
+    disc_interpolates = d(interpolates)
+
+    gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolates,
+                                    grad_outputs=torch.ones(disc_interpolates.size()).to(device),
+                                    create_graph=True, retain_graph=True)[0]
+    gradients = gradients.reshape(batch_size, -1)
+    gradients_norm = torch.sqrt(torch.sum(gradients ** 2, dim=1) + 1e-12)
+    return ((gradients_norm - 1) ** 2).mean() * LAMBDA
 
 
 # Training loop
 for epoch in range(n_epochs):
-    for batch in train_loader:
-        batch = batch.to(device)
-        z, jacobian = net(batch)
-        loss = calc_loss(z, jacobian, prior)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        train_log.append(loss.item())
-        k += 1
+    train_batch_loss = []
+    for batch, _ in tqdm(train_loader):
+        critic_iter += 1
+        x_real = batch.to(device)
 
-    with torch.no_grad():
-        z, jacobian = net(X_val)
-        loss = calc_loss(z, jacobian, prior)
-        val_log[k] = loss.item()
+        d_optimizer.zero_grad()
+        x_fake = g(bs=x_real.shape[0])
+        gp = gradient_penalty(x_real, x_fake)
+        d_loss = d(x_fake).mean() - d(x_real).mean() + gp
+        d_loss.backward()
+        d_optimizer.step()
 
-    if loss.item() < best_nll:  # since loss curve is very flat near bottom, we will neglect this
-        best_nll = loss.item()
-        save_checkpoint({'epoch': epoch, 'state_dict': net.state_dict()}, save_dir)
+        if critic_iter % n_critic == 0:
+            g_optimizer.zero_grad()
+            x_fake = g(bs=x_real.shape[0])
+            g_loss = -d(x_fake).mean()
+            g_loss.backward()
+            g_optimizer.step()
 
-    print('[Epoch %d/%d]\t[Step: %d]\tTrain Loss: %s\tTest Loss: %s' \
-          % (epoch + 1, n_epochs, k, np.mean(train_log[-10:]), val_log[k]))
+            g_scheduler.step()
+            d_scheduler.step()
+
+            train_batch_loss.append(g_loss.item())
+
+    train_log.append(np.mean(train_batch_loss))
+
+    if train_log[-1] < best_nll:  # since loss curve is very flat near bottom, we will neglect this
+        best_nll = train_log[-1]
+        save_checkpoint({'epoch': epoch, 'g_state_dict': g.state_dict(), 'd_state_dict': d.state_dict()}, save_dir)
+
+    print('[Epoch %d/%d]\tTrain Loss: %s' \
+          % (epoch + 1, n_epochs, train_log[-1]))
 
 # Plotting each minibatch step
 x_val = list(val_log.keys())
