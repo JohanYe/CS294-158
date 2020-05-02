@@ -7,7 +7,7 @@ from Hw2.model import *
 sns.set_style("darkgrid")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-k = 15
+k = 50
 net = flow(k, 100).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
 batch_size = 125
@@ -19,9 +19,9 @@ save_dir = './checkpoints/'
 
 plt.figure(1)
 x, y = sample_data()
-plt.scatter(x[:, 0], x[:, 1], marker='.', c=y)
+plt.scatter(x[:5000, 0], x[:5000, 1], marker='.', c=y[:5000])
 plt.savefig('./Hw2/Figures/Figure_1.pdf')
-plt.close(1)
+# plt.close(1)
 train_loader = torch.utils.data.DataLoader(torch.from_numpy(x[:int(len(x) * 0.8)]).float(), batch_size=batch_size,
                                            shuffle=True)
 X_val = torch.from_numpy(x[int(len(x) * 0.8):]).float().to(device)
@@ -89,12 +89,12 @@ load_checkpoint('./checkpoints/best.pth.tar', net)
 pdf = net.sampling(pixel=200)
 
 ax[1].imshow(np.rot90(pdf.cpu().numpy()))
-ax[1].set_xticks([])
-ax[1].set_yticks([])
+# ax[1].set_xticks([])
+# ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
-plt.close()
+# plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
+# plt.close()
 
 # Latent visualization
 x, y = sample_data()
@@ -103,5 +103,5 @@ pi, mu, var = net(x)
 z = net.Latent(x, pi, mu, var).cpu().detach().numpy()
 
 plt.figure(3)
-plt.scatter(z[:, 0], z[:, 1], c=y)
+plt.scatter(z[:40000, 0], z[:40000, 1], c=y[:40000])
 plt.savefig('./Hw2/Figures/Figure_3.pdf', bbox_inches='tight')

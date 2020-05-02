@@ -8,21 +8,22 @@ import torch.optim as optim
 import pickle as pkl
 import torchvision
 from tqdm import tqdm
-
 sns.set_style("darkgrid")
+
 
 k = 0
 beta = 0
 batch_size = 64
-n_epochs = 50
+n_epochs = 30
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = ConvVAE().to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=3)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3)
 train_log = {}
 val_log = {}
 best_nll = np.inf
 save_dir = './checkpoints/'
+
 
 # Loading data
 train_loader = torch.utils.data.DataLoader(SVHNDataset('train'), batch_size, shuffle=True)
@@ -37,13 +38,14 @@ plt.imshow(np.transpose(img_grid, (1, 2, 0)))
 plt.axis('off')
 plt.savefig('./Hw3/Figures/Figure_7.pdf')
 
+
 # Training loop
 for epoch in range(n_epochs):
     train_batch_loss = []
     for batch in tqdm(train_loader):
         net.train()
         batch = batch.to(device)
-        loss, kl, nll = net.calc_loss(batch, beta)
+        loss, kl, nll = net.calc_loss(batch)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -51,13 +53,12 @@ for epoch in range(n_epochs):
         train_batch_loss.append(loss.item())
 
         k += 1
-        if 1 > beta:
-            beta += 0.001
+
     val_batch_loss = []
     for batch in tqdm(val_loader):
         with torch.no_grad():
             net.eval()
-            loss, kl, nll = net.calc_loss(batch.to(device), 1)
+            loss, kl, nll = net.calc_loss(batch.to(device))
             val_log[k] = [loss.item(), kl.item(), nll.item()]
             val_batch_loss.append(loss.item())
 
@@ -68,7 +69,6 @@ for epoch in range(n_epochs):
 
     print('[Epoch %d/%d][Step: %d] Train Loss: %s Test Loss: %s' \
           % (epoch + 1, n_epochs, k, np.mean(train_batch_loss), np.mean(val_batch_loss)))
-
 
 
 # Plotting each minibatch step
@@ -113,4 +113,19 @@ X_sampled = net.sample(100)
 img_grid = torchvision.utils.make_grid(X_sampled.cpu().detach(), nrow=10).numpy()
 plt.figure(figsize=(12, 12))
 plt.imshow(np.transpose(img_grid, (1, 2, 0)))
-plt.savefig('./Hw2/Figures/Figure_9.pdf', bbox_inches='tight')
+# plt.savefig('./Hw3/Figures/Figure_10.pdf', bbox_inches='tight')
+
+load_checkpoint('./checkpoints/best.pth.tar', net)
+plt.figure(4)
+x = next(iter(test_loader))[:20]
+interpolations,interpolations_mu = net.interpolations(x)
+img_grid = torchvision.utils.make_grid(interpolations.cpu().detach(), nrow=10).numpy()
+plt.figure(figsize=(12, 12))
+plt.imshow(np.transpose(img_grid, (1, 2, 0)))
+plt.savefig('./Hw3/Figures/Figure_10.pdf', bbox_inches='tight')
+
+plt.figure(5)
+img_grid = torchvision.utils.make_grid(interpolations_mu.cpu().detach(), nrow=10).numpy()
+plt.figure(figsize=(12, 12))
+plt.imshow(np.transpose(img_grid, (1, 2, 0)))
+plt.savefig('./Hw3/Figures/Figure_11.pdf', bbox_inches='tight')

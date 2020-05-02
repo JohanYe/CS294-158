@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 class MaskedLinear(nn.Linear):
 
@@ -24,17 +26,19 @@ class MaskedLinear(nn.Linear):
         if self.bias is not None:
             nn.init.zeros_(self.bias)
 
+
 class flow(nn.Module):
     """
     MADE one hidden layer
     """
-    def __init__(self, k, hidden_size = 100):
+
+    def __init__(self, k, hidden_size=100):
         super(flow, self).__init__()
 
         self.k = k
         mask_1 = torch.ones([hidden_size, 2]).to(device)
         mask_1[:, 1] = 0  # masking x2
-        mask_2 = torch.ones([2*self.k, hidden_size]).to(device)
+        mask_2 = torch.ones([2 * self.k, hidden_size]).to(device)
         mask_2[:k, :] = 0  # Not entirely sure what this does
 
         # x1
@@ -54,17 +58,26 @@ class flow(nn.Module):
         self.log_var_2.set_mask(mask_2)
 
     def forward(self, x):
-
         pi = self.pi_2(F.relu(self.pi_1(x)))
-        pi = F.softmax(pi.view(-1,2,self.k),dim=2)
+        pi = F.softmax(pi.view(-1, 2, self.k), dim=2)
 
         mu = self.mu_2(F.relu(self.mu_1(x)))
-        mu = mu.view(-1,2,self.k)
+        mu = mu.view(-1, 2, self.k)
 
         log_var = self.log_var_2(F.relu(self.log_var_1(x)))
-        var = torch.exp(log_var).view(-1,2,self.k)
+        var = torch.exp(log_var).view(-1, 2, self.k)
 
         return pi, mu, var
+
+    def sample(self, num_samples, prior):
+        out = torch.zeros(num_samples, 2, self.k)
+
+
+        x = prior.sample((num_samples, 2)).to(self.device)  # z is sampled, but then converted to x
+        for i in reversed(range(len(self.layers))):
+            x = self.layers[i].inverse(x, self.mask[i])
+
+        return x
 
     def sampling(self, pixel=100):
         axis = np.linspace(-4, 4, pixel)
@@ -81,7 +94,6 @@ class flow(nn.Module):
         return pdf
 
     def Latent(self, x, pi, mu, var):
-
         z = torch.distributions.normal.Normal(mu, var).cdf(x.unsqueeze(2))
         z = torch.sum(pi * z, dim=2)
         return z
@@ -117,7 +129,7 @@ class AffineCoupling(nn.Module):
         t = self.translate(x_masked) * (1 - mask)
 
         z = x_masked + (1 - mask) * (x * torch.exp(s) + t)  # Eq 9 RealNVP
-        jacobian = torch.sum(s, dim=-1)#, keepdim=True)
+        jacobian = torch.sum(s, dim=-1)  # , keepdim=True)
         return z, jacobian
 
     def inverse(self, z, mask=None):
@@ -129,7 +141,7 @@ class AffineCoupling(nn.Module):
         # x = x_masked + (1 - mask) * (x * torch.exp(s) + t)
         x = z_masked + (1 - mask) * (z - t) * torch.exp(-s)  # Inverse propagation
         # jacobian = torch.sum(s, dim=-1)
-        return x #, jacobian
+        return x  # , jacobian
 
 
 class RealNVP(nn.Module):

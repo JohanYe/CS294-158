@@ -13,9 +13,9 @@ ds2 = True
 k = 0
 beta = 0
 batch_size = 125
-n_epochs = 15
+n_epochs = 10
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-net = VariationalAutoEncoder(vector=False).to(device)
+net = VariationalAutoEncoder(vector=True).to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
 train_log = {}
 val_log = {}
@@ -25,14 +25,14 @@ save_dir = './checkpoints/'
 fig, ax = plt.subplots(1, 2)
 # Data set 1
 x1 = sample_data_1()
-ax[0].scatter(x1[:, 0], x1[:, 1])
+ax[0].scatter(x1[:10000, 0], x1[:10000, 1])
 ax[0].set_title('Data set 1')
-ax[0].set_xlim(-17.5, 17.5)
-ax[0].set_ylim(-17.5, 17.5)
+ax[0].set_xlim(-25, 25)
+ax[0].set_ylim(-25, 25)
 
 # Data set 2
 x2 = sample_data_2()
-ax[1].scatter(x2[:, 0], x2[:, 1])
+ax[1].scatter(x2[:10000, 0], x2[:10000, 1])
 ax[1].set_title('Data set 2')
 plt.savefig('./Hw3/Figures/Figure_1.pdf', bbox_inches='tight')
 
@@ -60,7 +60,7 @@ for epoch in range(n_epochs):
 
         k += 1
         if 1 > beta:
-            beta += 0.0005
+            beta += 0.0003
 
     with torch.no_grad():
         net.eval()
@@ -95,7 +95,7 @@ plt.legend(loc='best')
 plt.title('Training Curve')
 plt.xlabel('Num Steps')
 plt.ylabel('NLL in bits per dim')
-plt.savefig('./Hw3/Figures/Figure_2.pdf', bbox_inches='tight')
+# plt.savefig('./Hw3/Figures/Figure_2.pdf', bbox_inches='tight')
 # plt.close()
 
 # Load best and generate
@@ -107,6 +107,7 @@ ax[0].scatter(samples[:, 0], samples[:, 1], label='Sampled')
 ax[0].set_title("No decoder noise")
 ax[0].set_xlim(-17.5, 17.5)
 ax[0].set_ylim(-17.5, 17.5)
+ax[0].legend(loc='best')
 
 samples = net.sample(1000, decoder_noise=True).detach().cpu().numpy()
 ax[1].scatter(X_val.cpu()[:1000, 0], X_val.cpu()[:1000, 1], label='X original')
@@ -114,6 +115,7 @@ ax[1].scatter(samples[:, 0], samples[:, 1], label='Sampled')
 ax[1].set_title("Decoder noise")
 ax[1].set_xlim(-17.5, 17.5)
 ax[1].set_ylim(-17.5, 17.5)
+ax[1].legend(loc='best')
 if ds1:
     plt.savefig('./Hw3/Figures/Figure_3ds1.pdf', bbox_inches='tight')
 else:

@@ -99,6 +99,11 @@ class ConvVAE(nn.Module):
         z = mu + torch.randn_like(mu).mul(std)
         return z
 
+    def TopDown(self, z):
+        mu_x, lv_x = self.decoder(z)
+        x_recon = self.reparameterize(mu_x, lv_x)
+        return x_recon
+
     def forward(self, x):
         mu_z, lv_z = self.encoder(x)
         z = self.reparameterize(mu_z, lv_z)
@@ -106,20 +111,19 @@ class ConvVAE(nn.Module):
         x_recon = self.reparameterize(mu_x, lv_x)
         return x_recon
 
-    def calc_loss(self, x, beta):
+    def calc_loss(self, x):
         mu_z, lv_z = self.encoder(x)
         z = self.reparameterize(mu_z, lv_z)
         mu_x, lv_x = self.decoder(z)
+        x_recon = self.reparameterize(mu_x, lv_x)
+        reconstruction_loss = nn.functional.mse_loss(x, x_recon, reduction='none').view(x.shape[0], -1).sum(1).mean()
 
-        reconstruction_loss = -torch.mean(torch.sum(log_normal_pdf(x, mu_x, lv_x), dim=-3)) / np.log(2) / 2
+        kl = -(lv_z*0.5) - 0.5 + 0.5 * (torch.exp(lv_z) + mu_z ** 2)
+        kl = kl.sum(1).mean()
 
-        mu_standard = torch.zeros_like(mu_z)
-        lv_standard = torch.ones_like(lv_z)
-        log_qz = log_normal_pdf(z, mu_z, lv_z)
-        log_pz = log_normal_pdf(z, mu_standard, lv_standard)
-        kl = (log_qz - log_pz).mean() / np.log(2) / 2
+        ELBO = reconstruction_loss + np.max((kl, 1))
 
-        return reconstruction_loss + kl * beta, kl, reconstruction_loss
+        return ELBO, kl, reconstruction_loss
 
     def sample(self, num_samples):
         z = torch.randn([num_samples, self.latent_dim]).to(self.device)
@@ -127,6 +131,92 @@ class ConvVAE(nn.Module):
         x_recon = self.reparameterize(mu_x, lv_x)
         return x_recon
 
+    def interpolations(self,x):
+        with torch.no_grad():
+            mu_z, lv_z = self.encoder(x)
+            z = self.reparameterize(mu_z, lv_z)
+            z1, z2 = z.chunk(2, dim=0)
+            interpolations = [self.TopDown(z1 * (1 - alpha) + z2 * alpha) for alpha in np.linspace(0, 1, 10)]
+            interpolations = torch.stack(interpolations, dim=1).view(-1, 3, 32, 32)
+            interpolations_mu = [self.decoder(z1 * (1 - alpha) + z2 * alpha)[0] for alpha in np.linspace(0, 1, 10)]
+            interpolations_mu = torch.stack(interpolations_mu, dim=1).view(-1, 3, 32, 32)
+
+
+        return interpolations, interpolations_mu
+
+
+
+
+class ConvVAE2(nn.Module):
+    """ Was lazy with this model so hardcoded everything """
+    def __init__(self, latent_dim=16):
+        super(ConvVAE2, self).__init__()
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.latent_dim = latent_dim
+
+        self.encoder = [nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1)] + [nn.ReLU()]  +\
+            [nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)] + [nn.ReLU()] +\
+            [nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)] + [nn.ReLU()] +\
+            [nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)]
+        self.encoder = nn.Sequential(*self.encoder)
+        conv_out_dim = (32 // 16)**2 * 256
+        self.fc1 = nn.Linear(conv_out_dim, 2 * latent_dim)
+
+        self.conv_in_size = (64, 32 // 16, 32 // 16)
+        self.fc2 = nn.Linear(latent_dim, np.prod(self.conv_in_size))
+        self.decoder = [nn.ReLU()] + [nn.ConvTranspose2d(64, 128, kernel_size=4, stride=2, padding=1)] +\
+                       [nn.ReLU()] + [nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1)] +\
+                       [nn.ReLU()] + [nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)] +\
+                       [nn.ReLU()] + [nn.ConvTranspose2d(32, 6, kernel_size=4, stride=2, padding=1)]
+        self.decoder = nn.Sequential(*self.decoder)
+
+
+    def reparameterize(self, mu, lv):
+        std = lv.mul(0.5).exp()
+        z = mu + torch.randn_like(mu).mul(std)
+        return z
+
+    def BottomUp(self,x):
+        out = self.encoder(x)
+        out = out.view(out.shape[0], -1)
+        mu_z, lv_z = self.fc1(out).chunk(2, dim=1)
+        return mu_z, lv_z
+
+    def TopDown(self, z):
+        out = self.fc2(z)
+        out = out.view(out.shape[0], *self.conv_in_size)
+        mu_x, lv_x = self.decoder(out).chunk(2, dim=1)
+        return mu_x, lv_x
+
+    def forward(self, x):
+        mu_z, lv_z = self.BottomUp(x)
+        z = self.reparameterize(mu_z, lv_z)
+        mu_x, lv_x = self.TopDown(z)
+        x_recon = self.reparameterize(mu_x, lv_x)
+        return x_recon
+
+    def calc_loss(self, x, beta):
+        mu_z, lv_z = self.BottomUp(x)
+        z = self.reparameterize(mu_z, lv_z)
+        mu_x, lv_x = self.TopDown(z)
+        x_recon = self.reparameterize(mu_x, lv_x)
+
+        reconstruction_loss = nn.functional.mse_loss(x, x_recon, reduction='none').view(x.shape[0], -1).sum(1).mean()
+
+        kl = -(lv_z*0.5) - 0.5 + 0.5 * (torch.exp(lv_z) + mu_z ** 2)
+        kl = kl.sum(1).mean()
+
+        ELBO = reconstruction_loss + np.max((kl, 1))
+
+
+        return ELBO, kl, reconstruction_loss
+
+    def sample(self, num_samples):
+        z = torch.randn([num_samples, self.latent_dim]).to(self.device)
+        mu_x, lv_x = self.TopDown(z)
+        x_recon = self.reparameterize(mu_x, lv_x)
+        return x_recon
 
 
 
