@@ -31,11 +31,16 @@ def save_checkpoint(state, save_dir, ckpt_name='best.pth.tar'):
 
     torch.save(state, file_path)
 
-def load_checkpoint(checkpoint, model):
+def load_checkpoint(checkpoint, g_model, d_model):
     if not os.path.exists(checkpoint):
         raise Exception("File {} dosen't exists!".format(checkpoint))
     checkpoint = torch.load(checkpoint)
-    saved_dict = checkpoint['state_dict']
-    new_dict = model.state_dict()
-    new_dict.update(saved_dict)
-    model.load_state_dict(new_dict)
+    saved_dict = checkpoint['d_state_dict']
+    d_new_dict = d_model.state_dict()
+    d_new_dict.update(saved_dict)
+    d_model.load_state_dict(d_new_dict)
+
+    saved_dict = checkpoint['g_state_dict']
+    g_new_dict = g_model.state_dict()
+    g_new_dict.update(saved_dict)
+    g_model.load_state_dict(g_new_dict)

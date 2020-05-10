@@ -11,7 +11,7 @@ sns.set_style("darkgrid")
 k = 0
 beta = 0
 batch_size = 128
-n_epochs = 40
+n_epochs = 20
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = IWAE1(n_hidden=128).to(device)
 # net = PytorchIWAE(num_hidden1=100, num_hidden2=100, latent=2, in_dim=2).to(device)

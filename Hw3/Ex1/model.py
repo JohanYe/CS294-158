@@ -6,7 +6,7 @@ from Hw3.Ex1.Utils import *
 
 
 class VariationalAutoEncoder(nn.Module):
-    def __init__(self, n_layers=4, n_hidden=64, vector=True):
+    def __init__(self, n_layers=4, n_hidden=32, vector=True):
         super(VariationalAutoEncoder, self).__init__()
 
         self.n_layers = n_layers
@@ -73,16 +73,11 @@ class VariationalAutoEncoder(nn.Module):
         # log_var_x = nn.Softplus()(log_var_x)
 
         # KL
-        # kl = -0.5 * log_var_z + 0.5 * (log_var_z.exp() + mu_z ** 2) - 0.5
-        # kl = kl.sum(1).mean()
         kl = torch.mean(-0.5 * torch.sum(1 + log_var_z - mu_z ** 2 - torch.exp(log_var_z), dim=1))
-
         # Recon_loss - negative 1 is multiplied due to optimizing on the negative reconstruction error.
         reconstruction_loss = - 0.5 * np.log(2 * np.pi) - 0.5 * log_var_x - (x - mu_x) ** 2 / (
                 2 * log_var_x.exp() + 1e-5)
         reconstruction_loss = torch.sum(-reconstruction_loss, dim=1).mean() / np.log(2) / 2
-        # reconstruction_loss = 0.5 * np.log(2 * np.pi) + 0.5 * log_var_x + (x - mu_x) ** 2 * log_var_x.exp() * 0.5
-        # reconstruction_loss = reconstruction_loss.sum(1).mean()
 
         return reconstruction_loss + kl * beta, kl, reconstruction_loss
 
@@ -91,12 +86,18 @@ class VariationalAutoEncoder(nn.Module):
         mu_x, log_var_x = self.decoder(z)
         # log_var_x = nn.Softplus()(log_var_x)
         print(mu_x.shape, log_var_x.shape)
+        print(log_var_x)
         if decoder_noise:
             std_x = (0.5 * log_var_x).exp()
             x_recon = torch.randn_like(mu_x) * std_x + mu_x
         else:
             x_recon = mu_x
         return x_recon
+
+    def get_latent(self, x):
+        mu_z, log_var_z = self.encoder(x)
+        z_Gx = self.reparameterize(mu_z, log_var_z)
+        return z_Gx, mu_z
 
 
 class IWAE1(nn.Module):
