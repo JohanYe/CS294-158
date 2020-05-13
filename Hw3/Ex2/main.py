@@ -13,12 +13,12 @@ sns.set_style("darkgrid")
 
 k = 0
 beta = 0
-batch_size = 64
-n_epochs = 30
+batch_size = 128
+n_epochs = 50
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 net = ConvVAE().to(device)
 optimizer = optim.Adam(net.parameters(), lr=2e-4)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3)
+# scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3)
 train_log = {}
 val_log = {}
 best_nll = np.inf
@@ -36,7 +36,7 @@ img_grid = torchvision.utils.make_grid(quick_plot.cpu(), nrow=8).numpy()
 plt.figure(figsize=(12, 12))
 plt.imshow(np.transpose(img_grid, (1, 2, 0)))
 plt.axis('off')
-plt.savefig('./Hw3/Figures/Figure_7.pdf')
+plt.savefig('./Hw3/Figures/SVHN_Figure.pdf')
 
 
 # Training loop
@@ -62,7 +62,7 @@ for epoch in range(n_epochs):
             val_log[k] = [loss.item(), kl.item(), nll.item()]
             val_batch_loss.append(loss.item())
 
-    scheduler.step(np.mean(val_batch_loss))
+    # scheduler.step(np.mean(val_batch_loss))
     if loss.item() < best_nll:
         best_nll = loss.item()
         save_checkpoint({'epoch': epoch, 'state_dict': net.state_dict()}, save_dir)
@@ -98,16 +98,27 @@ plt.ylabel('NLL in bits per dim')
 plt.savefig('./Hw3/Figures/Figure_8.pdf', bbox_inches='tight')
 # plt.close()
 
-quick_plot = next(iter(train_loader))[:100]
-reconstructions = net(quick_plot)
-img_grid = torchvision.utils.make_grid(reconstructions.cpu().detach(), nrow=8).numpy()
-plt.figure(figsize=(12, 12))
-plt.imshow(np.transpose(img_grid, (1, 2, 0)))
-plt.savefig('./Hw3/Figures/Figure_9.pdf', bbox_inches='tight')
-plt.axis('off')
-
 # Load best and generate
 load_checkpoint('./checkpoints/best.pth.tar', net)
+quick_plot = next(iter(train_loader))[:100]
+reconstructions_noise = net(quick_plot,noise=True)
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+reconstructions_no_noise = net(quick_plot, noise=False)
+img_grid = torchvision.utils.make_grid(reconstructions_no_noise.cpu().detach(), nrow=10).numpy()
+ax[0].imshow(np.transpose(img_grid, (1, 2, 0)))
+ax[0].axis('off')
+ax[0].set_title('No decoder noise')
+
+reconstructions = net(quick_plot)
+img_grid = torchvision.utils.make_grid(reconstructions_noise.cpu().detach(), nrow=10).numpy()
+ax[1].imshow(np.transpose(img_grid, (1, 2, 0)))
+ax[1].axis('off')
+ax[1].set_title('With decoder noise')
+plt.savefig('./Hw3/Figures/Figure_9.pdf', bbox_inches='tight')
+
+
+
 plt.figure(3)
 X_sampled = net.sample(100)
 img_grid = torchvision.utils.make_grid(X_sampled.cpu().detach(), nrow=10).numpy()
@@ -129,3 +140,5 @@ img_grid = torchvision.utils.make_grid(interpolations_mu.cpu().detach(), nrow=10
 plt.figure(figsize=(12, 12))
 plt.imshow(np.transpose(img_grid, (1, 2, 0)))
 plt.savefig('./Hw3/Figures/Figure_11.pdf', bbox_inches='tight')
+
+
