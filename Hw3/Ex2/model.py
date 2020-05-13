@@ -130,10 +130,11 @@ class ConvVAE(nn.Module):
         # kl = -(lv_z*0.5) - 0.5 + 0.5 * (torch.exp(lv_z) + mu_z ** 2)
         # kl = kl.sum(1).mean()
 
-        reconstruction_loss = log_normal_pdf(x, mu_x, lv_x).mean()
+        reconstruction_loss = -log_normal_pdf(x, mu_x, lv_x).sum(dim=[1,2,3]).mean()
         zeros = torch.zeros_like(z).to(self.device)
         ones = torch.ones_like(z).to(self.device)
-        kl = (log_normal_pdf(z, mu_z, lv_z) - log_normal_pdf(z, zeros, ones)).mean()
+        kl = (log_normal_pdf(z, mu_z, lv_z) - log_normal_pdf(z, zeros, ones)).sum(dim=1).mean()
+        # print(reconstruction_loss, kl)
 
         ELBO = reconstruction_loss + np.max((kl, 1))
 

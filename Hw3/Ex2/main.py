@@ -103,7 +103,7 @@ load_checkpoint('./checkpoints/best.pth.tar', net)
 quick_plot = next(iter(train_loader))[:100]
 reconstructions_noise = net(quick_plot,noise=True)
 
-fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+fig, ax = plt.subplots(2, 1, figsize=(10, 5))
 reconstructions_no_noise = net(quick_plot, noise=False)
 img_grid = torchvision.utils.make_grid(reconstructions_no_noise.cpu().detach(), nrow=10).numpy()
 ax[0].imshow(np.transpose(img_grid, (1, 2, 0)))
@@ -127,18 +127,20 @@ plt.imshow(np.transpose(img_grid, (1, 2, 0)))
 # plt.savefig('./Hw3/Figures/Figure_10.pdf', bbox_inches='tight')
 
 load_checkpoint('./checkpoints/best.pth.tar', net)
-plt.figure(4)
+fig, ax = plt.subplots(2, 1)
 x = next(iter(test_loader))[:20]
-interpolations,interpolations_mu = net.interpolations(x)
-img_grid = torchvision.utils.make_grid(interpolations.cpu().detach(), nrow=10).numpy()
-plt.figure(figsize=(12, 12))
-plt.imshow(np.transpose(img_grid, (1, 2, 0)))
-plt.savefig('./Hw3/Figures/Figure_10.pdf', bbox_inches='tight')
+interpolations, interpolations_mu = net.interpolations(x)
 
-plt.figure(5)
 img_grid = torchvision.utils.make_grid(interpolations_mu.cpu().detach(), nrow=10).numpy()
-plt.figure(figsize=(12, 12))
-plt.imshow(np.transpose(img_grid, (1, 2, 0)))
-plt.savefig('./Hw3/Figures/Figure_11.pdf', bbox_inches='tight')
+ax[0].imshow(np.transpose(img_grid, (1, 2, 0)))
+ax[0].set_title('No decoder noise')
+ax[0].axis('off')
+
+img_grid = torchvision.utils.make_grid(interpolations.cpu().detach(), nrow=10).numpy()
+ax[1].imshow(np.transpose(img_grid, (1, 2, 0)))
+ax[1].set_title('Decoder noise')
+ax[1].axis('off')
+fig.tight_layout()
+plt.savefig('./Hw3/Figures/Figure_10.pdf', bbox_inches='tight')
 
 
