@@ -75,7 +75,7 @@ This time both models behave the same due to the multivariate diagonal covarianc
 ![img](Hw3/Figures/Figure_10-1.png)
 
 ### WGAN Training Curves
-![img](Hw4/figures/Training curves-1.png)
+![img](Hw4/figures/Training_curves-1.png)
 
 ### WGAN Results
 ![img](Hw4/figures/Best_samples-1.png)
