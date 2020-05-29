@@ -89,11 +89,11 @@ load_checkpoint('./checkpoints/best.pth.tar', net)
 pdf = net.sampling(pixel=200)
 
 ax[1].imshow(np.rot90(pdf.cpu().numpy()))
-# ax[1].set_xticks([])
-# ax[1].set_yticks([])
+ax[1].set_xticks([])
+ax[1].set_yticks([])
 ax[1].set_title("Best distribution on validation set")
 
-# plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
+plt.savefig('./Hw2/Figures/Figure_2.pdf', bbox_inches='tight')
 # plt.close()
 
 # Latent visualization

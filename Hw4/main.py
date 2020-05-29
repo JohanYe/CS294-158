@@ -24,19 +24,20 @@ train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuf
 # Show some samples
 x_plot, labels = next(iter(train_loader))
 imshow(torchvision.utils.make_grid(x_plot[:100], nrow=10))
-plt.savefig('./figures/figure_1.pdf', bbox_inches='tight')
+plt.savefig('./Hw4/figures/figure_1.pdf', bbox_inches='tight')
 plt.close()
 
 # Hyperparams
 k = 0
 epoch = 0
-n_epochs = 1250
+n_epochs = 60
 g_train_log = []
 d_train_log = []
 best_nll = np.inf
+best_nll_negative = np.inf
 save_dir = './checkpoints/'
 critic_iter = 0
-n_critic = 5
+n_critic = 3
 
 # Generator
 g = Generator().to(device)
@@ -85,8 +86,8 @@ for epoch in range(n_epochs):
             g_loss.backward()
             g_optimizer.step()
 
-            g_scheduler.step()
-            d_scheduler.step()
+            # g_scheduler.step()
+            # d_scheduler.step()
 
             g_train_batch_loss.append(g_loss.item())
 
@@ -96,8 +97,8 @@ for epoch in range(n_epochs):
     if g_train_log[-1] < best_nll and g_train_log[-1] > 0:  # since loss curve is very flat near bottom, we will neglect this
         best_nll = g_train_log[-1]
         save_checkpoint({'g_state_dict': g.state_dict(), 'd_state_dict': d.state_dict(),
-                         'g_optimizer': g_optimizer.state_dict(), 'd_optimizer': d_optimizer.step(),
-                         'g_scheduler': g_scheduler.state_dict(), 'd_scheduler': d_scheduler.state_dict(),
+                         'g_optimizer': g_optimizer.state_dict(), 'd_optimizer': d_optimizer.state_dict(),
+                         # 'g_scheduler': g_scheduler.state_dict(), 'd_scheduler': d_scheduler.state_dict(),
                          'g_train_log': g_train_log, 'd_train_log': d_train_log,
                          'epoch': epoch, 'best_nll': best_nll}, save_dir)
         imshow(torchvision.utils.make_grid(x_fake[:100].detach().cpu(), nrow=10))
@@ -105,6 +106,7 @@ for epoch in range(n_epochs):
         plt.savefig(filename, bbox_inches='tight')
         plt.close()
     elif epoch % 10 == 0:
+        imshow(torchvision.utils.make_grid(x_fake[:100].detach().cpu(), nrow=10))
         filename = './Hw4/figures/epoch' + str(epoch) + '.pdf'
         plt.savefig(filename, bbox_inches='tight')
         plt.close()
@@ -112,6 +114,9 @@ for epoch in range(n_epochs):
         imshow(torchvision.utils.make_grid(x_fake[:100].detach().cpu(), nrow=10))
         plt.savefig('./Hw4/figures/latest.pdf', bbox_inches='tight')
         plt.close()
+
+    if epoch == 30:  # The loss curve needs to stabilize, we give it 30 epochs
+        best_nll = np.inf
 
     print('[Epoch %d/%d]\tTrain Loss: %s' % (epoch + 1, n_epochs, g_train_log[-1]))
 

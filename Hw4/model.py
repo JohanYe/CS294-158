@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from Hw4.utils import PrintLayerShape
 
+
 class UpsamplingDepthToSpace(nn.Module):
     def __init__(self, block_size=2):
         super(UpsamplingDepthToSpace, self).__init__()
@@ -17,7 +18,7 @@ class UpsamplingDepthToSpace(nn.Module):
         up_channels = int(or_channels / self.block_size_sq)
         out_expanded = out.reshape(bs, or_height, or_width, self.block_size_sq, up_channels)  # 4 copies
         split = out_expanded.split(self.block_size, dim=3)  # split in 2
-        stack = [x.reshape(bs, or_height, up_width, up_channels) for x in split] # reshape to double h and w
+        stack = [x.reshape(bs, or_height, up_width, up_channels) for x in split]  # reshape to double h and w
         out = torch.stack(stack, 0).transpose(0, 1).permute(0, 2, 1, 3, 4).reshape(
             bs, up_height, up_width, up_channels)  # Stack, transpose, and reshape to [N, H, W, C]
         out = out.permute(0, 3, 1, 2)
@@ -25,19 +26,19 @@ class UpsamplingDepthToSpace(nn.Module):
 
 
 class UpsampleConv2d(nn.Module):
-    def __init__(self, c_in, c_out, ks=4, padding=1):
+    def __init__(self, c_in, c_out, ks=3, padding=1):
         super(UpsampleConv2d, self).__init__()
         self.c_in = c_in
         self.c_out = c_out
         self.kernel_size = ks
         self.padding = padding
 
-        self.conv = nn.Conv2d(c_in, c_out, kernel_size=ks,stride=1, padding=padding)
+        self.conv = nn.Conv2d(c_in, c_out, kernel_size=ks, stride=1, padding=padding)
         self.depth_to_space = UpsamplingDepthToSpace(2)
 
     def forward(self, x):
         x = torch.cat([x, x, x, x], dim=1)  # Prep for upsampling method.
-        x = self.depth_to_space(x) # special upsampling method.
+        x = self.depth_to_space(x)  # special upsampling method.
         x = self.conv(x)
         return x
 
@@ -97,13 +98,13 @@ class DownsamplingSpaceToDepth(nn.Module):
         out = x.permute(0, 2, 3, 1)
         (bs, or_height, or_width, or_channels) = out.shape
         down_height = int(or_height / self.block_size)
-        down_width = int(or_width / self.block_size)
         down_channels = int(or_channels * self.block_size_sq)
         split = x.split(self.block_size, dim=2)
         stack = [x.reshape(bs, down_height, down_channels) for x in split]
         output = torch.stack(stack, dim=1)
         output = output.permute(0, 3, 2, 1)
         return output.contiguous()
+
 
 class Downsample_Conv2d(nn.Module):
     def __init__(self, c_in, c_out, ks=3, stride=1, padding=1):
@@ -113,12 +114,11 @@ class Downsample_Conv2d(nn.Module):
         self.kernel_size = ks
         self.padding = padding
 
-        self.conv = nn.Conv2d(c_in, c_out, kernel_size=ks, stride=1, padding=padding,bias=True)
+        self.conv = nn.Conv2d(c_in, c_out, kernel_size=ks, stride=stride, padding=padding, bias=True)
         self.space_to_depth = DownsamplingSpaceToDepth(2)
 
     def forward(self, x):
         x = self.space_to_depth(x)
-        # TODO: ASK RASMUS
         x = sum(x.chunk(4, dim=1)) / 4.0
         x = self.conv(x)
         return x
@@ -143,6 +143,7 @@ class DownResnetBlock(nn.Module):
         x = self.downsample_x(x)
         return res + x
 
+
 class ResnetBlock(nn.Module):
     def __init__(self, c_in, filters=128):
         super(ResnetBlock, self).__init__()
@@ -153,7 +154,7 @@ class ResnetBlock(nn.Module):
             nn.ReLU(),
             nn.Conv2d(c_in, filters, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Conv2d(filters, filters, kernel_size=3, stride=1,padding=1)
+            nn.Conv2d(filters, filters, kernel_size=3, stride=1, padding=1)
         )
 
     def forward(self, x):
@@ -162,22 +163,22 @@ class ResnetBlock(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, filters=128):
         super(Discriminator, self).__init__()
 
         self.layers = nn.Sequential(
-            DownResnetBlock(3, filters=128),
-            DownResnetBlock(128, 128),
-            ResnetBlock(128, 128),
-            ResnetBlock(128, 128),
+            DownResnetBlock(3, filters=filters),
+            DownResnetBlock(filters, filters),
+            ResnetBlock(filters, filters),
+            ResnetBlock(filters, filters),
             nn.ReLU(),
         )
-        self.fc = nn.Linear(128, 1)
+        self.fc = nn.Linear(filters, 1)
 
     def forward(self, x):
         x = self.layers(x)
+        print(x.shape)
         x = torch.sum(x, dim=[2, 3])  # TODO: WHY ARE THESE SUMMED?
+        print(x.shape)
         x = self.fc(x)
         return x
-
-
